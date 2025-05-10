@@ -1,4 +1,15 @@
-#We first generate the data as specified in the instructions.
+#We first load libraries.
+library(lattice)
+library(latticeExtra)
+library(spida2)
+library(ggplot2)
+library(dplyr)
+library(gridExtra)
+
+
+#Now we generate the data as specified in the instructions.
+
+set.seed(123)
 
 sd <- sqrt(20)
 sd
@@ -28,7 +39,7 @@ summary(Y_2)
 #We will separately consider the following three treatments:
 
 #Treatment 1: Half the students are assigned randomly to take the course
-#independently of Y_1
+#independently of Y_1.
 
 #Treatment 2: Students are assigned to take the course if their grade on Y_1
 #is below a certain cutoff. We use the median of Y_1 as a cutoff to ensure that
@@ -38,4 +49,279 @@ summary(Y_2)
 #certain cutoff. Like in the previous treatment, we use the median of L as a
 #cutoff to ensure that half the students take the course and half do not.
 
+#Treatment 1:
 
+#We first construct a dataframe using all the data we have about students (L, Y_1,
+#Y_2, Course).
+
+Course_one <- sample(rep(0:1, each = 500))
+table(Course_one)
+
+dataframe_one <- data.frame(L, Y_1, Y_2, Course_one)
+dataframe_one
+
+#Now we compare the following models as suggested on the assignment:
+#Model 1: Y_2 ~ Course
+#Model 2: D ~ Course where D = Y_2 - Y_1
+#Model 3: Y_2 ~ Course + Y_1
+#Model 4: D ~ Course + Y_1
+
+#Model 1:
+
+model_one_1 <- lm(Y_2 ~ Course_one, data = dataframe_one)
+summary(model_one_1)
+
+mean_0 <- mean(dataframe_one$Y_2[dataframe_one$Course_one == "0"])
+mean_1 <- mean(dataframe_one$Y_2[dataframe_one$Course_one == "1"])
+
+mean_0
+mean_1
+
+gd(3)
+p1_1 <- xyplot(Y_2 ~ Y_1, groups = Course_one, data = dataframe_one, 
+       xlab = "Y_1", ylab = "Y_2", main = "Model 1: Y_2 ~ Course",
+       auto.key = list(title = "Course", space = "right"),
+       pch = 20, alpha = 0.4,
+       panel = function(x, y, groups, ...) {
+         panel.superpose(x, y, groups = groups, ...)
+         group_colors <- trellis.par.get("superpose.symbol")$col
+         panel.abline(h = mean_0, col = group_colors[1], lwd = 2)
+         panel.abline(h = mean_1, col = group_colors[2], lwd = 2)
+       })
+
+#Model 2:
+
+D <- Y_2 - Y_1
+
+model_two_1 <- lm(D ~ Course_one, data = dataframe_one)
+summary(model_two_1)
+
+dd <- dataframe_one[order(dataframe_one$Y_1),]
+dd$fit_D <- predict(model_two_1, newdata = dd)
+dd$fit_Y_2 <- dd$Y_1 + dd$fit_D
+p1_2 <- xyplot(Y_2 ~ Y_1, data = dd, groups = Course_one,
+       pch = 20,alpha = 0.4,
+       xlab = "Y_1", ylab = "Y_2", main = "Model 2: D ~ Course",
+       auto.key = list(title = "Course", space = "right"), type = 'p') +
+  xyplot(fit_Y_2 ~ Y_1, data = dd, groups = Course_one, type = 'l')
+
+#Model 3:
+
+model_three_1 <- lm(Y_2 ~ Course_one + Y_1, data = dataframe_one)
+summary(model_three_1)
+
+dd <- dataframe_one[order(dataframe_one$Y_1),]
+dd$fit <- predict(model_three_1, newdata = dd)
+p1_3 <- xyplot(Y_2 ~ Y_1, data = dd, groups = Course_one,
+  pch = 20,alpha = 0.4,
+  xlab = "Y_1", ylab = "Y_2", main = "Model 3: Y_2 ~ Course + Y_1",
+  auto.key = list(title = "Course", space = "right"), type = 'p') +
+  xyplot(fit ~ Y_1, data = dd, groups = Course_one, type = 'l')
+
+#Model 4:
+
+model_four_1 <- lm(D ~ Course_one + Y_1, data = dataframe_one)
+summary(model_four_1)
+
+dd <- dataframe_one[order(dataframe_one$Y_1),]
+dd$fit_D <- predict(model_four_1, newdata = dd)
+dd$fit_Y_2 <- dd$Y_1 + dd$fit_D
+p1_4 <- xyplot(Y_2 ~ Y_1, data = dd, groups = Course_one,
+       pch = 20,alpha = 0.4,
+       xlab = "Y_1", ylab = "Y_2", main = "Model 4: D ~ Course + Y_1",
+       auto.key = list(title = "Course", space = "right"), type = 'p') +
+  xyplot(fit_Y_2 ~ Y_1, data = dd, groups = Course_one, type = 'l')
+
+grid.arrange(p1_1, p1_2, p1_3, p1_4, ncol = 2)
+
+#Treatment 2:
+
+#We first split the students based on the cutoff value of the median of Y_1.
+
+dataframe_two <- data.frame(L, Y_1, Y_2)
+dataframe_two
+
+Course_two <- c()
+
+for (n in 1:1000) {
+  if (dataframe_two$Y_1[n] > 50.35) {
+    Course_two[n] <- 0
+  }
+  if (dataframe_two$Y_1[n] <= 50.35) {
+    Course_two[n] <- 1
+  }
+}
+
+Course_two
+table(Course_two)
+
+dataframe_two$Course_two <- Course_two
+dataframe_two
+
+#Now we compare the following models as suggested on the assignment:
+#Model 1: Y_2 ~ Course
+#Model 2: D ~ Course where D = Y_2 - Y_1
+#Model 3: Y_2 ~ Course + Y_1
+#Model 4: D ~ Course + Y_1
+
+#Model 1: Y_2 ~ Course
+
+model_one_2 <- lm(Y_2 ~ Course_two, data = dataframe_two)
+summary(model_two_1)
+
+mean_0 <- mean(dataframe_two$Y_2[dataframe_two$Course_two == "0"])
+mean_1 <- mean(dataframe_two$Y_2[dataframe_two$Course_two == "1"])
+
+mean_0
+mean_1
+
+p2_1 <- xyplot(Y_2 ~ Y_1, groups = Course_two, data = dataframe_two, 
+               xlab = "Y_1", ylab = "Y_2", main = "Model 1: Y_2 ~ Course",
+               auto.key = list(title = "Course", space = "right"),
+               pch = 20, alpha = 0.4,
+               panel = function(x, y, groups, ...) {
+                 panel.superpose(x, y, groups = groups, ...)
+                 group_colors <- trellis.par.get("superpose.symbol")$col
+                 panel.abline(h = mean_0, col = group_colors[1], lwd = 2)
+                 panel.abline(h = mean_1, col = group_colors[2], lwd = 2)
+               })
+
+#Model 2:
+
+model_two_2 <- lm(D ~ Course_two, data = dataframe_two)
+summary(model_two_2)
+
+dd <- dataframe_two[order(dataframe_two$Y_1),]
+dd$fit_D <- predict(model_two_2, newdata = dd)
+dd$fit_Y_2 <- dd$Y_1 + dd$fit_D
+p2_2 <- xyplot(Y_2 ~ Y_1, data = dd, groups = Course_two,
+               pch = 20,alpha = 0.4,
+               xlab = "Y_1", ylab = "Y_2", main = "Model 2: D ~ Course",
+               auto.key = list(title = "Course", space = "right"), type = 'p') +
+  xyplot(fit_Y_2 ~ Y_1, data = dd, groups = Course_two, type = 'l')
+
+#Model 3:
+
+model_three_2 <- lm(Y_2 ~ Course_two + Y_1, data = dataframe_two)
+summary(model_three_2)
+
+dd <- dataframe_two[order(dataframe_two$Y_1),]
+dd$fit <- predict(model_three_2, newdata = dd)
+p2_3 <- xyplot(Y_2 ~ Y_1, data = dd, groups = Course_two,
+               pch = 20,alpha = 0.4,
+               xlab = "Y_1", ylab = "Y_2", main = "Model 3: Y_2 ~ Course + Y_1",
+               auto.key = list(title = "Course", space = "right"), type = 'p') +
+  xyplot(fit ~ Y_1, data = dd, groups = Course_two, type = 'l')
+
+#Model 4:
+
+model_four_2 <- lm(D ~ Course_two + Y_1, data = dataframe_two)
+summary(model_four_2)
+
+dd <- dataframe_two[order(dataframe_two$Y_1),]
+dd$fit_D <- predict(model_four_2, newdata = dd)
+dd$fit_Y_2 <- dd$Y_1 + dd$fit_D
+p2_4 <- xyplot(Y_2 ~ Y_1, data = dd, groups = Course_two,
+               pch = 20,alpha = 0.4,
+               xlab = "Y_1", ylab = "Y_2", main = "Model 4: D ~ Course + Y_1",
+               auto.key = list(title = "Course", space = "right"), type = 'p') +
+  xyplot(fit_Y_2 ~ Y_1, data = dd, groups = Course_two, type = 'l')
+
+p2_4
+
+grid.arrange(p2_1, p2_2, p2_3, p2_4, ncol = 2)
+
+#Treatment 3:
+
+#We first split the students based on the cutoff value of the median of L.
+
+dataframe_three <- data.frame(L, Y_1, Y_2)
+dataframe_three
+
+Course_three <- c()
+
+for (n in 1:1000) {
+  if (dataframe_three$L[n] > 50.04) {
+    Course_three[n] <- 0
+  }
+  if (dataframe_three$L[n] <= 50.04) {
+    Course_three[n] <- 1
+  }
+}
+
+Course_three
+table(Course_three)
+
+dataframe_three$Course_three <- Course_three
+dataframe_three
+
+#Now we compare the following models as suggested on the assignment:
+#Model 1: Y_2 ~ Course
+#Model 2: D ~ Course where D = Y_2 - Y_1
+#Model 3: Y_2 ~ Course + Y_1
+#Model 4: D ~ Course + Y_1
+
+#Model 1: Y_2 ~ Course
+
+model_one_3 <- lm(Y_2 ~ Course_three, data = dataframe_three)
+summary(model_one_3)
+
+mean_0 <- mean(dataframe_three$Y_2[dataframe_three$Course_three == "0"])
+mean_1 <- mean(dataframe_three$Y_2[dataframe_three$Course_three == "1"])
+
+mean_0
+mean_1
+
+p3_1 <- xyplot(Y_2 ~ Y_1, groups = Course_three, data = dataframe_three, 
+               xlab = "Y_1", ylab = "Y_2", main = "Model 1: Y_2 ~ Course",
+               auto.key = list(title = "Course", space = "right"),
+               pch = 20, alpha = 0.4,
+               panel = function(x, y, groups, ...) {
+                 panel.superpose(x, y, groups = groups, ...)
+                 group_colors <- trellis.par.get("superpose.symbol")$col
+                 panel.abline(h = mean_0, col = group_colors[1], lwd = 2)
+                 panel.abline(h = mean_1, col = group_colors[2], lwd = 2)
+               })
+
+#Model 2: D ~ Course where D = Y_2 - Y_1
+
+model_two_3 <- lm(D ~ Course_three, data = dataframe_three)
+summary(model_two_3)
+
+dd <- dataframe_three[order(dataframe_three$Y_1),]
+dd$fit_D <- predict(model_two_3, newdata = dd)
+dd$fit_Y_2 <- dd$Y_1 + dd$fit_D
+p3_2 <- xyplot(Y_2 ~ Y_1, data = dd, groups = Course_three,
+               pch = 20,alpha = 0.4,
+               xlab = "Y_1", ylab = "Y_2", main = "Model 2: D ~ Course",
+               auto.key = list(title = "Course", space = "right"), type = 'p') +
+  xyplot(fit_Y_2 ~ Y_1, data = dd, groups = Course_three, type = 'l')
+
+#Model 3: Y_2 ~ Course + Y_1
+
+model_three_3 <- lm(Y_2 ~ Course_three + Y_1, data = dataframe_one)
+summary(model_three_3)
+
+dd <- dataframe_three[order(dataframe_three$Y_1),]
+dd$fit <- predict(model_three_3, newdata = dd)
+p3_3 <- xyplot(Y_2 ~ Y_1, data = dd, groups = Course_three,
+               pch = 20,alpha = 0.4,
+               xlab = "Y_1", ylab = "Y_2", main = "Model 3: Y_2 ~ Course + Y_1",
+               auto.key = list(title = "Course", space = "right"), type = 'p') +
+  xyplot(fit ~ Y_1, data = dd, groups = Course_three, type = 'l')
+
+#Model 4: D ~ Course + Y_1
+
+model_four_3 <- lm(D ~ Course_three + Y_1, data = dataframe_three)
+summary(model_four_3)
+
+dd <- dataframe_three[order(dataframe_three$Y_1),]
+dd$fit_D <- predict(model_four_3, newdata = dd)
+dd$fit_Y_2 <- dd$Y_1 + dd$fit_D
+p3_4 <- xyplot(Y_2 ~ Y_1, data = dd, groups = Course_three,
+               pch = 20,alpha = 0.4,
+               xlab = "Y_1", ylab = "Y_2", main = "Model 4: D ~ Course + Y_1",
+               auto.key = list(title = "Course", space = "right"), type = 'p') +
+  xyplot(fit_Y_2 ~ Y_1, data = dd, groups = Course_three, type = 'l')
+
+grid.arrange(p3_1, p3_2, p3_3, p3_4, ncol = 2)
