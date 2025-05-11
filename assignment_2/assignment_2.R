@@ -6,7 +6,6 @@ library(ggplot2)
 library(dplyr)
 library(gridExtra)
 
-
 #Now we generate the data as specified in the instructions.
 
 set.seed(123)
@@ -226,8 +225,6 @@ p2_4 <- xyplot(Y_2 ~ Y_1, data = dd, groups = Course_two,
                xlab = "Y_1", ylab = "Y_2", main = "Model 4: D ~ Course + Y_1",
                auto.key = list(title = "Course", space = "right"), type = 'p') +
   xyplot(fit_Y_2 ~ Y_1, data = dd, groups = Course_two, type = 'l')
-
-p2_4
 
 grid.arrange(p2_1, p2_2, p2_3, p2_4, ncol = 2)
 
