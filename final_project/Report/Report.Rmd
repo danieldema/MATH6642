@@ -1,0 +1,566 @@
+---
+title: "Causal Inference for Cognitive Decline Using Mixed Effects Models"
+author: "Daniel Dema"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    fig_width: 6
+    fig_height: 4
+    dev: 'svg'
+    self_contained: false
+knit: (function(inputFile, encoding) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = getwd()) })
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(spida2)
+library(p3d)
+library(nlme)
+library(car)
+library(lattice)
+library(latticeExtra)
+library(dplyr)
+library(glmmTMB)
+library(DHARMa)
+library(splines)
+library(performance)
+library(lme4)
+library(lmerTest)
+```
+
+# Abstract
+
+In [1], the authors analyze a sample of longitudinal data from the OASIS (Open Access Series of Imaging Studies, see [2]) dataset, consisting of 150 subjects between the ages of 60 to 96. Subjects are categorized by their CDR (Clinical Dementia Ratio), being either nondemented (CDR = 0), having very mild Alzheimer's disease, (CDR = 0.5) or having mild Alzheimer's disease (CDR = 1). The authors analyze the progression of brain volume atrophy in Alzheimer's disease. In this report, we use the same dataset (retrieved from [3]) to study the progression of cognitive decline in Alzheimer's disease using MMSE (Mini-Mental State Examination) score as a proxy for cognitive decline. We model MMSE using a linear mixed effects model on various predictors in the dataset for the purpose of examining causes of cognitive decline, and in doing so we explore the limitations of mixed effect models on non-normal, heavily skewed data.
+
+# Introduction
+
+Clinical Dementia Rating (CDR) is a system used to stratify the severity of Alzheimer's disease into stages. Stages include 0: nondemented, 0.5: questionable (or "very mild" as described in [1]), 1: mild, 2: moderate, 3: severe, and scoring is based on an interview with the subject, assessing impairment in the categories of memory, orientation, judgement and problem solving, community affairs, home and hobbies, and personal care [4]. 
+
+The Mini-Mental State Examination (MMSE) is a test used to assess cognitive ability of patients with dementia or various psychiatric conditions. It has been found to accurately distinguish patients with cognitive deficiencies from those without, and MMSE scores correlate with scores in other standard cognition tests [5], making it a suitable proxy for modelling cognitive decline.
+
+We will model MMSE using features in the dataset to assess predictors for cognitive decline. Determining strongest predictors for cognitive decline allows for earlier diagnosis of Alzheimer's disease. Earlier diagnosis allows for earlier treatment, slowing disease progression and reducing financial strain on healthcare systems [6]. We will build a linear mixed effects (LME) model. LMEs are effective at modelling data that is "clustered", such as longitudinal data; in this case, the "clusters" are the individual subjects, each having multiple visits. LMEs combine "fixed effects" and "random effects", hence the "mixed" part of the name. Fixed effects are effects that are assumed to be consistent across individuals while random effects are effects that differ for individuals, allowing us to account for the fact that different subjects have different baselines. LMEs are typically most effective when the response variable is normally distributed. With our data, we will see that MMSE is not normally distributed, and we will explore the limitations that arise and attempt to improve our model with various diagnostic methods. We will discuss possible alternative models that offer some hope of addressing these limitations.
+
+<div style="page-break-before: always;"></div>
+
+# Dataset
+
+Features of interest in the dataset for our modelling include Subject ID (Subject.ID), visit number (Visit), sex (M.F), age at visit (Age), years of education (EDUC), socioeconomic status (SES), MMSE score (MMSE), CDR score (CDR), and normalized whole brain volume (nWBV). All subjects are right handed. Subjects were screened to ensure exclusion of subjects with physiological causes of dementia other than Alzheimer's disease [1].
+
+```{r}
+df <- read.csv("D:/Daniel/Documents/MATH6642/final_project/oasis_longitudinal.csv")
+dc <- df[!is.na(df$MMSE) & !is.na(df$SES), ]
+
+#Note: SES is ordered lowest = 5 and highest = 1; we will reverse the ordering
+dc$SES <- 5 - dc$SES
+
+dc <- dc[order(dc$Subject.ID, dc$Age), ]
+
+#The head of the dataframe:
+print(head(dc))
+```
+
+Education level is slightly right-skewed. Socioeconomic status is concentrated towards higher levels. Sex is slightly skewed towards females.
+
+```{r}
+par(mfrow = c(1, 3))
+
+hist(dc$EDUC, 
+     breaks = 10, 
+     main = "Histogram of Education Level", 
+     xlab = "Years of Education",
+     ylab = "Number of Individuals",
+     col = "lightblue",
+     border = "white")
+
+barplot(table(dc$SES),
+        main = "Barplot of Socioeconomic Status",
+        xlab = "SES",
+        ylab = "Number of Individuals",
+        col = "lightblue",
+        border = "white")
+
+barplot(table(dc$M.F), 
+        main = "Barplot of Sex", 
+        xlab = "Sex", 
+        ylab = "Number of Individuals", 
+        col = c("pink", "lightblue"),
+        border = "white")
+```
+
+MMSE is heavily left-skewed. Comparing initial visit to final visit MMSE distribution, we see a decline in average MMSE.
+
+```{r}
+initial_visits <- dc[ave(dc$Visit, dc$Subject.ID, FUN = min) == dc$Visit, ]
+final_visits <- dc[ave(dc$Visit, dc$Subject.ID, FUN = max) == dc$Visit, ]
+
+#Set layout: 1 row, 2 columns
+par(mfrow = c(1, 2))
+
+#Histogram for initial visits
+hist(initial_visits$MMSE,
+     main = "Initial Visit MMSE", 
+     breaks = 0:30,
+     xlab = "MMSE",
+     ylab = "Number of Individuals",
+     col = "lightblue", 
+     border = "white", 
+     xlim = c(0, 30))
+
+#Histogram for final visits
+hist(final_visits$MMSE,
+     main = "Final Visit MMSE", 
+     breaks = 0:30,
+     xlab = "MMSE",
+     ylab = "Number of Individuals",
+     col = "lightblue", 
+     border = "white", 
+     xlim = c(0, 30))
+```
+
+We plot the longitudinal trajectories of nWBV, recreating the same plot as shown in [1]:
+
+```{r}
+cdr_colors <- c("0" = "lightblue", "0.5" = "violet", "1" = "darkblue")
+
+#nWBV trajectories
+xyplot(nWBV ~ Age, data = dc,
+       groups = Subject.ID,
+       type = "b",
+       lwd = 1,
+       pch = 16,
+       col = cdr_colors[as.character(dc$CDR)],
+       xlab = "Age (years)",
+       ylab = "nWBV (%)",
+       main = "Longitudinal trajectories of nWBV per subject by CDR group",
+       key = list(text = list(c("CDR 0", "CDR 0.5", "CDR 1")),
+                  points = list(pch = 16, col = c("lightblue", "violet", "darkblue")),
+                  columns = 3))
+```
+
+And we analogously plot the longitudinal trajectories of MMSE:
+
+```{r}
+#MMSE trajectories
+xyplot(MMSE ~ Age, data = dc,
+       groups = Subject.ID,
+       type = "b",
+       lwd = 1,
+       pch = 16,
+       col = cdr_colors[as.character(dc$CDR)],
+       xlab = "Age (years)",
+       ylab = "MMSE",
+       main = "Longitudinal trajectories of MMSE per subject by CDR group",
+       key = list(text = list(c("CDR 0", "CDR 0.5", "CDR 1")),
+                  points = list(pch = 16, col = c("lightblue", "violet", "darkblue")),
+                  columns = 3))
+```
+
+<div style="page-break-before: always;"></div>
+
+# Results
+
+## Modelling Random Effects
+
+For our fixed effects, we tentatively include terms nWBV, Age, EDUC, SES, M.F. We begin by testing random effects. For random effects, we consider time-variant variables; in this case, nWBV and Age. We make the reasonable assumption that EDUC and SES are time-invariant for an elderly population.
+
+Between random effects 1, 1 + Age and 1 + nWBV, ANOVA testing produces the lowest AIC for 1 + nWBV. So we proceed with the following model:
+
+```{r}
+fit2 <- lme(MMSE ~ nWBV + Age + M.F + SES + EDUC, 
+            data = dc, 
+            random = ~ 1 + nWBV | Subject.ID,
+            correlation = corAR1(form = ~ 1 | Subject.ID),
+            control = lmeControl(opt = "optim", maxIter = 200, msMaxIter = 200))
+```
+
+Examining this model produces p-values > 0.05 for all predictors other than nWBV.
+
+```{r}
+summary(fit2)
+```
+
+<div style="page-break-before: always;"></div>
+
+## Modelling Fixed Effects
+
+For our fixed effects, we now consider interaction terms. Plausible three-way interaction terms and corresponding hypotheses for consideration include the following:
+
+1) nWBV * Age * SES: Higher SES allows for access to higher quality healthcare, slowing decay in nWBV during the aging process
+2) nWBV * Age * M.F: Decay in nWBV during the aging process differs between male and female for biological reasons
+3) nWBV * Age * EDUC: Higher education slows the decay in nWBV during the aging process
+
+Building separate models considering each interaction term and running ANOVA tests revealed the following model to have the lowest AIC:
+
+```{r}
+fit3 <- lme(MMSE ~ nWBV + Age + M.F + SES + EDUC + nWBV * Age * SES
+            + nWBV * Age + nWBV * SES + Age * SES, 
+            data = dc, 
+            random = ~ 1 + nWBV | Subject.ID,
+            correlation = corAR1(form = ~ 1 | Subject.ID),
+            control = lmeControl(opt = "optim", maxIter = 200, msMaxIter = 200))
+```
+
+However, all predictors in this model have p-value > 0.05, making it unsuitable for causal inference:
+
+```{r}
+summary(fit3)
+```
+
+We discard three-way interaction terms and instead consider two-way interaction terms. Plausible two-way interaction terms and corresponding hypotheses include the following:
+
+1) nWBV * Age: Brain volume changes with age
+2) nWBV * EDUC: Education acts as a buffer against brain volume loss
+3) nWBV * SES : Higher SES allows for better healthcare access, reducing brain volume loss
+4) nWBV * M.F : Sex affects change in brain volume for biological reasons
+5) Age * EDUC : Education acts as a buffer against age effects
+6) Age * M.F : Aging affects males and females differently
+7) Age * SES : Higher SES allows for better healthcare access, reducing aging effects
+
+Modelling these hypotheses and assessing AIC values from ANOVA tests found this model to be the best performing:
+
+```{r}
+fit5 <- lme(MMSE ~ nWBV + Age + SES + nWBV * SES + Age * SES, 
+            data = dc, 
+            random = ~ 1 + nWBV | Subject.ID,
+            correlation = corAR1(form = ~ 1 | Subject.ID),
+            control = lmeControl(opt = "optim", maxIter = 200, msMaxIter = 200))
+```
+
+And we see that all terms here are significant (p-value < 0.05). Note that sex and years of education were dropped as ANOVA testing found them to be insignificant:
+
+```{r}
+summary(fit5)
+```
+
+Inspecting the random effects coefficients reveals that the correlation between the random slope and intercept is -1, which is suggestive of numerical instability in the random effects. Within-subject centering made no improvements, but including non-linear terms was successful in correlation improvement.
+
+<div style="page-break-before: always;"></div>
+
+## Non-linear Terms
+
+To introduce non-linearity to the model, we initially added a squared nWBV term to the fixed effects:
+
+
+```{r}
+dc$nWBV_scaled <- scale(dc$nWBV)[,1]
+dc$nWBV_sq_scaled <- dc$nWBV_scaled^2
+
+fit6 <- lmer(MMSE ~ nWBV_scaled + nWBV_sq_scaled + Age + SES + 
+             nWBV_scaled * SES + Age * SES + 
+             (1 + nWBV_scaled | Subject.ID),
+             data = dc)
+```
+
+All terms are significant (p-value < 0.05), and the correlation in the random effects becomes a slightly more stable -0.96:
+
+```{r}
+summary(fit6)
+anova(fit6)
+```
+
+Using splines more effectively captured non-linearity:
+
+```{r}
+dc$nWBV_scaled <- scale(dc$nWBV)[,1]
+
+fit_spline <- lmer(MMSE ~ ns(nWBV_scaled, df=4) + Age + SES + nWBV_scaled*SES + Age:SES + 
+                   (1 + nWBV_scaled | Subject.ID),
+                   data = dc,
+                   REML = TRUE)
+```
+
+And again, we see that all terms are significant (p-values < 0.05) with correlation in the random effects reduced to -0.95:
+
+```{r}
+summary(fit_spline)
+anova(fit_spline)
+```
+
+Purely by AIC, our model which does not account for non-linearity performs the best.
+
+```{r}
+anova(fit_spline, fit6)
+AIC(fit_spline, fit6, fit5)
+```
+
+<div style="page-break-before: always;"></div>
+
+# Discussion
+
+## Model Interpretation
+
+We discuss the interpretation of the three models we constructed in the Results section. We will refer to the model with only linear terms (fit5) as Model 1. We will refer to the model with squared nWBV (fit6) as Model 2. We will refer to the model with splines (fit_spline) as Model 3.
+
+Beginning with Model 1:
+
+```{r}
+summary(fit5)
+```
+
+In the random effects, the high standard deviation for nWBV is indicative of variance in baseline nWBV by subject. The correlation of -1 suggests that the slope an intercept are strongly negatively correlated, but as discussed earlier is indicative of numerical issues, so we will not make an attempt to interpret it here.
+
+In the fixed effects, the coefficient for nWBV (~85.07) suggests that higher nWBV is associated with higher MMSE, which is to be expected. The coefficient for Age (~0.25) suggests that higher age is associated with higher MMSE. This is something to be cautious of, as one would expect cognitive ability to decrease with age; this could also allude to a limitation in the data. Though there is an interaction term involving Age; the coefficient for Age:SES (~-0.08) suggests that the affect of age on MMSE decreases as socioeconomic status increases, which is sensible, since higher socioeconomic status allows for better healthcare access, which one would expect would slow down the affects of age. The coefficient for SES (~21.82) suggests that higher SES is associated with higher MMSE, which is again sensible for reasons of better healthcare access. Lastly, the coefficient for nWBV:SES (~-21.05) suggests that the positive effect of nWBV decreases as socioeconiomic status increases. Note that all coefficients are significant with p-value < 0.01.
+
+Now we consider Model 2:
+
+```{r}
+summary(fit6)
+anova(fit6)
+```
+
+In the random effects, the highly negative correlation between slope and intercept (-0.96) suggests that subjects with higher baseline MMSE experience greater decline in MMSE with loss of brain volume.
+
+In the fixed effects, the coefficient for nWBV (~3.60) suggests that higher nWBV is associated with higher MMSE. However, the coefficient for squared nWBV (~-0.34) dampens this effect. In particular, since nWBV ranges from 0 to 1, squaring nWBV will reduce it, so this dampening effect will be lower for higher nWBV and higher for lower nWBV. Similar to Model 1, the coefficient for Age (~0.24) suggests a positive effect of age on MMSE, and the coefficient for SES (~6.92) suggests a positive effect of SES on MMSE. The interpretation of the interaction coefficients for nWBV:SES (~-0.88) and Age:SES (~-.008) are both the same as the interpretations in Model 1; as SES increases, the effect of nWBV and effect of age decreases. Again, all coefficients are significant with p-value ~ 0.02 for squared nWBV and p-value < 0.01 for all other terms.
+
+Lastly we consider Model 3:
+
+```{r}
+summary(fit_spline)
+anova(fit_spline)
+```
+
+The interpretation of random effects is similar to that of Model 2, with Model 3 having correlation (-0.95) between slope and intercept.
+
+In the fixed effects, the coefficients for Age, SES, SES:nWBV and Age:SES are similar to those in Model 2, and can be interpreted in the same way. The high, positive coefficients for the nWBV spline terms suggest that the relationship between MMSE and nWBV is both positive and highly non-linear. All coefficients are statistically significant with p-values < 0.01.
+
+In summary, our models all agree that higher brain volume, higher socioeconomic status, and higher age predict higher MMSE, with age having a smaller effect than brain volume and socioeconomic status, and the effects of brain volume and age being dampened through interactions with socioeconomic status.
+
+<div style="page-break-before: always;"></div>
+
+## Comparing Mean Trajectory Slopes
+
+We compute the mean of the slopes of the trajectory lines stratified by CDR from our MMSE trajectory plot constructed in the Dataset section:
+
+```{r}
+dc_copy <- dc
+
+subject_slopes <- dc_copy %>%
+  group_by(Subject.ID, CDR) %>%
+  filter(n() > 1) %>%  # need at least two points per subject
+  summarise(
+    slope = {
+      fit <- lm(MMSE ~ Age, data = cur_data())
+      coef(fit)["Age"]
+    },
+    .groups = "drop"
+  )
+
+avg_slopes_by_CDR_old <- subject_slopes %>%
+  group_by(CDR) %>%
+  summarise(
+    avg_slope = mean(slope, na.rm = TRUE),
+    n = n()
+  )
+
+print(avg_slopes_by_CDR_old)
+```
+
+We see that as CDR increases, expected decline rate of MMSE increases as well. This matches the trend for the mean nWBV trajectory slopes computed in [1], further verifying the association between MMSE and nWBV.
+
+We can similarly compute the mean of the slopes of the trajectory lines generated by Model 1:
+
+```{r}
+dc$fit_vals5 <- fitted(fit5)
+
+dc_slope <- dc %>%
+  select(Subject.ID, Age, fit_vals5, CDR) %>%
+  group_by(Subject.ID, CDR) %>%
+  arrange(Age, .by_group = TRUE) %>%
+  summarise(
+    slope = if (n() >= 2) coef(lm(fit_vals5 ~ Age))[2] else NA_real_,
+    .groups = "drop"
+  )
+
+avg_slopes_by_CDR_5 <- dc_slope %>%
+  group_by(CDR) %>%
+  summarise(
+    avg_slope = mean(slope, na.rm = TRUE),
+    n = n()
+  )
+
+print(avg_slopes_by_CDR_5)
+```
+
+And for those generated by Model 2:
+
+```{r}
+dc$fit_vals6 <- fitted(fit6)
+
+dc_slope <- dc %>%
+  select(Subject.ID, Age, fit_vals6, CDR) %>%
+  group_by(Subject.ID, CDR) %>%
+  arrange(Age, .by_group = TRUE) %>%
+  summarise(
+    slope = if (n() >= 2) coef(lm(fit_vals6 ~ Age))[2] else NA_real_,
+    .groups = "drop"
+  )
+
+avg_slopes_by_CDR_6 <- dc_slope %>%
+  group_by(CDR) %>%
+  summarise(
+    avg_slope = mean(slope, na.rm = TRUE),
+    n = n()
+  )
+
+print(avg_slopes_by_CDR_6)
+```
+
+And for those generated by Model 3:
+
+```{r}
+dc$fit_spline <- fitted(fit_spline)
+
+dc_slope <- dc %>%
+  select(Subject.ID, Age, fit_spline, CDR) %>%
+  group_by(Subject.ID, CDR) %>%
+  arrange(Age, .by_group = TRUE) %>%
+  summarise(
+    slope = if (n() >= 2) coef(lm(fit_spline ~ Age))[2] else NA_real_,
+    .groups = "drop"
+  )
+
+avg_slopes_by_CDR <- dc_slope %>%
+  group_by(CDR) %>%
+  summarise(
+    avg_slope = mean(slope, na.rm = TRUE),
+    n = n()
+  )
+
+print(avg_slopes_by_CDR)
+```
+
+Comparing the mean slopes per CDR group to those of the actual trajectories for each model, we see that Model 1 has the closest slope for CDR = 1 and the furthest for CDR = 0 and CDR = 0.5; in particular, for CDR = 0 it has a positive mean slope, making it unsuitable for predictions with this CDR group but quite suitable for CDR = 1. Model 3 appears to be the best model for CDR = 0 and CDR = 0.5, while Model 2 is slightly better than Model 3 for CDR = 1 but worse than Model 1. Note that these assessments are quite limited due to the small dataset size; in particular, many subject slopes were not able to be computed for the initial trajectories, so the CDR = 1 group is especially small (9 subjects).
+
+<div style="page-break-before: always;"></div>
+
+## Issues With Residuals
+
+To test residuals, we reconstruct our models as generalized linear mixed models using the glmmTMB package and then use the DHARMa package to plot residuals.
+
+For Model 1:
+
+```{r}
+fit5_tmb <- glmmTMB(
+  MMSE ~ nWBV + Age + SES + nWBV:SES + Age:SES + (1 + nWBV | Subject.ID),
+  data = dc,
+  REML = TRUE
+)
+
+res_5 <- simulateResiduals(fittedModel = fit5_tmb)
+plot(res_5)
+```
+
+For Model 2:
+
+```{r}
+fit6_tmb <- glmmTMB(
+  MMSE ~ nWBV_scaled + nWBV_sq_scaled + Age + SES + nWBV_scaled*SES + Age*SES + (1 + nWBV | Subject.ID),
+  data = dc,
+  REML = TRUE
+)
+
+res_6 <- simulateResiduals(fittedModel = fit6_tmb)
+plot(res_6)
+```
+
+For Model 3:
+
+```{r}
+dc$ns_nWBV_scaled <- ns(dc$nWBV_scaled, df = 4)
+ns_basis <- ns(dc$nWBV_scaled, df = 4)
+ns_df <- as.data.frame(ns_basis)
+colnames(ns_df) <- paste0("ns_nWBV_", 1:ncol(ns_df))
+
+dc <- bind_cols(dc, ns_df)
+
+fit_spline_tmb <- glmmTMB(
+  MMSE ~ ns_nWBV_1 + ns_nWBV_2 + ns_nWBV_3 + Age + SES + nWBV * SES + Age * SES
+  + (1 + nWBV | Subject.ID),
+  data = dc,
+  REML = TRUE
+)
+
+res_spline <- simulateResiduals(fit_spline_tmb)
+plot(res_spline)
+```
+
+Note that for Model 3 we've excluded ns_nWBV_4 as it is collinear with the other basis functions, which prevents DHARMa from simulating the residuals. This was unnecessary when we initially constructed the model in the results section, as LMER automatically droped the collinear column.
+
+In all three models, we see that the curves in the residual plots are not all flat, which is indicative of heteroskedasticity that the models fail to account for. Each model fails the KS test with p-value < 0.01, indicating that the residuals are not uniformly distributed, and each model fails the outlier test with p-value < 0.01, indicating that the model's performance is significantly affected by the presence of outliers. We see that even introducing non-linearity, as we have done in Model 2 and Model 3, does little to improve these issues. These are the limitations of LMEs that arise when working with non-normal data.
+
+<div style="page-break-before: always;"></div>
+
+## Possible Solutions for Residual Issues
+
+In this particular case, the data is heavily left-skewed, with most MMSE scores being at or close to 30. In particular, this means that this data has a lot of individuals who do not experience cognitive decline. We can flip the MMSE scores so that most scores are at or close to 0, resulting in zero-inflation. Then we can use glmmTMB to construct a generalized linear mixed model that accounts for zero-inflation, i.e it accounts for those individuals who do not experience cognitive decline.
+
+For example, we reconstruct Model 1 accounting for zero-inflation (note that we omit the random slope to resolve convergence issues): 
+
+```{r}
+dc_c <- dc
+dc_c$MMSE <- 30 - dc_c$MMSE
+dc_c$nWBV_scaled <- scale(dc_c$nWBV)[,1]
+dc_c$Age_scaled <- scale(dc_c$Age)[,1]
+dc_c$SES_scaled <- scale(dc_c$SES)[,1]
+
+fit5_tmb <- glmmTMB(
+  MMSE ~ nWBV_scaled + Age_scaled + SES_scaled + 
+         nWBV_scaled * SES_scaled + Age_scaled * SES_scaled + 
+         (1 | Subject.ID),
+  data = dc_c,
+  ziformula = ~ Age_scaled,
+  family = poisson,
+  REML = TRUE
+)
+
+AIC(fit5, fit5_tmb)
+```
+
+We see that this model performs significantly better than Model 1, as it has a significantly lower AIC. Moreover, we can plot the residuals:
+
+```{r}
+res1 <- simulateResiduals(fit5_tmb)
+plot(res1)
+```
+
+And we see that the model now passes the KS and outlier tests, suggesting that the residuals are uniformly distributed and that the model better handles outliers. The curves in the residual plots are still not perfectly flat indicating that the model still struggles with heteroskedasticity, though it is certainly an improvement to the previous plot.
+
+A similar approach shows some promise in improving Models 2 and 3. It was intended that those improvements be showcased in this report, though the models that worked in the original R script are experiencing convergence issues in markdown. Due to time constraints, the convergence issues are unable to be resolved for the purpose of this report, and so those models are omitted.
+
+<div style="page-break-before: always;"></div>
+
+## On the use of AI
+
+I would like to give credit to both ChatGPT and Claude for their assistance in completing this project. I used both LLMs for the following components of the project:
+
+-Plotting and computing mean trajectory slopes<br>
+-Double-checking p-value/coefficient interpretation<br>
+-Model Diagnostics<br>
+-R Troubleshooting<br>
+
+I found both models to be quite helpful for plotting. For example, when recreating the nWBV trajectories that I originally found in [1], I gave ChatGPT a screenshot from the paper and asked it to recreate this plot, which it was able to do successfully using xyplot.
+
+Both models were helpful in validating my impressions for p-values and interpreting model coefficients, though they were not perfect (for example, ChatGPT once interpreted a p-value to mean that the more complex model is a better fit when really it meant the simpler model is a better fit. Another example is Claude mixed up left and right skewed distributions when I showed it an image of my MMSE histogram.)
+
+I found both models to be unhelpful with model diagnostics. For example, I asked Claude for suggestions on how to deal with the random effects being numerically unstable (correlation = -1), and it suggested response transformations for MMSE (log, square root, Box-Cox). When these transformations made no difference and I asked it for alternatives, it proceeded to give the same suggestions in a loop.
+
+I found ChatGPT to be unhelpful for R troubleshooting, though Claude was quite helpful for R troubleshooting. For example, reproducing my R script involving non-linear terms in my LMEs was problematic in R markdown, as I started having singularity issues that did not come up when I ran the same lines of code in my original script. Claude suggested scaling nWBV and using LMER as an alternative to LME, and this resolved the issue. 
+
+<div style="page-break-before: always;"></div>
+
+# References
+
+[1] Marcus, Fotenos, et. al., (2010). *Open Access Series of Imaging Studies: Longitudinal MRI
+Data in Nondemented and Demented Older Adults*. MIT Press.
+
+[2] Marcus, Wang, et al., (2007). *Open Access Series of Imaging Studies (OASIS): cross-sectional MRI data in young, middle aged, nondemented, and demented older adults*. MIT Press.
+
+[3] Boysen, J., (2017). *MRI and Alzheimers*. Kaggle. Retrieved from https://www.kaggle.com/datasets/jboysen/mri-and-alzheimers
+
+[4] Morris, J. C., (1993). *The Clinical Dementia Rating (CDR) : Current version and scoring rules*. Wolters Kluwer.
+
+[5] Folstein, Folstein & McHugh, (1975). *“Mini-mental state”: A practical method for grading the cognitive state of patients for the clinician*. Elsevier.
+
+[6] Rasmussen & Langerman, (2019). *Alzheimer’s Disease – Why We Need Early Diagnosis*. Dove Medical Press.

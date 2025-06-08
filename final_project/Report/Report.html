@@ -1,0 +1,1312 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+
+<meta name="author" content="Daniel Dema" />
+
+<meta name="date" content="2025-06-07" />
+
+<title>Causal Inference for Cognitive Decline Using Mixed Effects Models</title>
+
+<script src="Report_files/header-attrs-2.29/header-attrs.js"></script>
+<script src="Report_files/jquery-3.6.0/jquery-3.6.0.min.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link href="Report_files/bootstrap-3.3.5/css/bootstrap.min.css" rel="stylesheet" />
+<script src="Report_files/bootstrap-3.3.5/js/bootstrap.min.js"></script>
+<script src="Report_files/bootstrap-3.3.5/shim/html5shiv.min.js"></script>
+<script src="Report_files/bootstrap-3.3.5/shim/respond.min.js"></script>
+<style>h1 {font-size: 34px;}
+       h1.title {font-size: 38px;}
+       h2 {font-size: 30px;}
+       h3 {font-size: 24px;}
+       h4 {font-size: 18px;}
+       h5 {font-size: 16px;}
+       h6 {font-size: 12px;}
+       code {color: inherit; background-color: rgba(0, 0, 0, 0.04);}
+       pre:not([class]) { background-color: white }</style>
+<script src="Report_files/navigation-1.1/tabsets.js"></script>
+<link href="Report_files/highlightjs-9.12.0/default.css" rel="stylesheet" />
+<script src="Report_files/highlightjs-9.12.0/highlight.js"></script>
+
+<style type="text/css">
+  code{white-space: pre-wrap;}
+  span.smallcaps{font-variant: small-caps;}
+  span.underline{text-decoration: underline;}
+  div.column{display: inline-block; vertical-align: top; width: 50%;}
+  div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+  ul.task-list{list-style: none;}
+    </style>
+
+<style type="text/css">code{white-space: pre;}</style>
+<script type="text/javascript">
+if (window.hljs) {
+  hljs.configure({languages: []});
+  hljs.initHighlightingOnLoad();
+  if (document.readyState && document.readyState === "complete") {
+    window.setTimeout(function() { hljs.initHighlighting(); }, 0);
+  }
+}
+</script>
+
+
+
+
+
+
+
+
+
+<style type = "text/css">
+.main-container {
+  max-width: 940px;
+  margin-left: auto;
+  margin-right: auto;
+}
+img {
+  max-width:100%;
+}
+.tabbed-pane {
+  padding-top: 12px;
+}
+.html-widget {
+  margin-bottom: 20px;
+}
+button.code-folding-btn:focus {
+  outline: none;
+}
+summary {
+  display: list-item;
+}
+details > summary > p:only-child {
+  display: inline;
+}
+pre code {
+  padding: 0;
+}
+</style>
+
+
+
+<!-- tabsets -->
+
+<style type="text/css">
+.tabset-dropdown > .nav-tabs {
+  display: inline-table;
+  max-height: 500px;
+  min-height: 44px;
+  overflow-y: auto;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.tabset-dropdown > .nav-tabs > li.active:before, .tabset-dropdown > .nav-tabs.nav-tabs-open:before {
+  content: "\e259";
+  font-family: 'Glyphicons Halflings';
+  display: inline-block;
+  padding: 10px;
+  border-right: 1px solid #ddd;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li.active:before {
+  content: "\e258";
+  font-family: 'Glyphicons Halflings';
+  border: none;
+}
+
+.tabset-dropdown > .nav-tabs > li.active {
+  display: block;
+}
+
+.tabset-dropdown > .nav-tabs > li > a,
+.tabset-dropdown > .nav-tabs > li > a:focus,
+.tabset-dropdown > .nav-tabs > li > a:hover {
+  border: none;
+  display: inline-block;
+  border-radius: 4px;
+  background-color: transparent;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li {
+  display: block;
+  float: none;
+}
+
+.tabset-dropdown > .nav-tabs > li {
+  display: none;
+}
+</style>
+
+<!-- code folding -->
+
+
+
+
+</head>
+
+<body>
+
+
+<div class="container-fluid main-container">
+
+
+
+
+<div id="header">
+
+
+
+<h1 class="title toc-ignore">Causal Inference for Cognitive Decline
+Using Mixed Effects Models</h1>
+<h4 class="author">Daniel Dema</h4>
+<h4 class="date">2025-06-07</h4>
+
+</div>
+
+
+<div id="abstract" class="section level1">
+<h1>Abstract</h1>
+<p>In [1], the authors analyze a sample of longitudinal data from the
+OASIS (Open Access Series of Imaging Studies, see [2]) dataset,
+consisting of 150 subjects between the ages of 60 to 96. Subjects are
+categorized by their CDR (Clinical Dementia Ratio), being either
+nondemented (CDR = 0), having very mild Alzheimer’s disease, (CDR = 0.5)
+or having mild Alzheimer’s disease (CDR = 1). The authors analyze the
+progression of brain volume atrophy in Alzheimer’s disease. In this
+report, we use the same dataset (retrieved from [3]) to study the
+progression of cognitive decline in Alzheimer’s disease using MMSE
+(Mini-Mental State Examination) score as a proxy for cognitive decline.
+We model MMSE using a linear mixed effects model on various predictors
+in the dataset for the purpose of examining causes of cognitive decline,
+and in doing so we explore the limitations of mixed effect models on
+non-normal, heavily skewed data.</p>
+</div>
+<div id="introduction" class="section level1">
+<h1>Introduction</h1>
+<p>Clinical Dementia Rating (CDR) is a system used to stratify the
+severity of Alzheimer’s disease into stages. Stages include 0:
+nondemented, 0.5: questionable (or “very mild” as described in [1]), 1:
+mild, 2: moderate, 3: severe, and scoring is based on an interview with
+the subject, assessing impairment in the categories of memory,
+orientation, judgement and problem solving, community affairs, home and
+hobbies, and personal care [4].</p>
+<p>The Mini-Mental State Examination (MMSE) is a test used to assess
+cognitive ability of patients with dementia or various psychiatric
+conditions. It has been found to accurately distinguish patients with
+cognitive deficiencies from those without, and MMSE scores correlate
+with scores in other standard cognition tests [5], making it a suitable
+proxy for modelling cognitive decline.</p>
+<p>We will model MMSE using features in the dataset to assess predictors
+for cognitive decline. Determining strongest predictors for cognitive
+decline allows for earlier diagnosis of Alzheimer’s disease. Earlier
+diagnosis allows for earlier treatment, slowing disease progression and
+reducing financial strain on healthcare systems [6]. We will build a
+linear mixed effects (LME) model. LMEs are effective at modelling data
+that is “clustered”, such as longitudinal data; in this case, the
+“clusters” are the individual subjects, each having multiple visits.
+LMEs combine “fixed effects” and “random effects”, hence the “mixed”
+part of the name. Fixed effects are effects that are assumed to be
+consistent across individuals while random effects are effects that
+differ for individuals, allowing us to account for the fact that
+different subjects have different baselines. LMEs are typically most
+effective when the response variable is normally distributed. With our
+data, we will see that MMSE is not normally distributed, and we will
+explore the limitations that arise and attempt to improve our model with
+various diagnostic methods. We will discuss possible alternative models
+that offer some hope of addressing these limitations.</p>
+<div style="page-break-before: always;">
+
+</div>
+</div>
+<div id="dataset" class="section level1">
+<h1>Dataset</h1>
+<p>Features of interest in the dataset for our modelling include Subject
+ID (Subject.ID), visit number (Visit), sex (M.F), age at visit (Age),
+years of education (EDUC), socioeconomic status (SES), MMSE score
+(MMSE), CDR score (CDR), and normalized whole brain volume (nWBV). All
+subjects are right handed. Subjects were screened to ensure exclusion of
+subjects with physiological causes of dementia other than Alzheimer’s
+disease [1].</p>
+<pre class="r"><code>df &lt;- read.csv(&quot;D:/Daniel/Documents/MATH6642/final_project/oasis_longitudinal.csv&quot;)
+dc &lt;- df[!is.na(df$MMSE) &amp; !is.na(df$SES), ]
+
+#Note: SES is ordered lowest = 5 and highest = 1; we will reverse the ordering
+dc$SES &lt;- 5 - dc$SES
+
+dc &lt;- dc[order(dc$Subject.ID, dc$Age), ]
+
+#The head of the dataframe:
+print(head(dc))</code></pre>
+<pre><code>##   Subject.ID        MRI.ID       Group Visit MR.Delay M.F Hand Age EDUC SES
+## 1  OAS2_0001 OAS2_0001_MR1 Nondemented     1        0   M    R  87   14   3
+## 2  OAS2_0001 OAS2_0001_MR2 Nondemented     2      457   M    R  88   14   3
+## 6  OAS2_0004 OAS2_0004_MR1 Nondemented     1        0   F    R  88   18   2
+## 7  OAS2_0004 OAS2_0004_MR2 Nondemented     2      538   F    R  90   18   2
+## 8  OAS2_0005 OAS2_0005_MR1 Nondemented     1        0   M    R  80   12   1
+## 9  OAS2_0005 OAS2_0005_MR2 Nondemented     2     1010   M    R  83   12   1
+##   MMSE CDR eTIV  nWBV   ASF
+## 1   27 0.0 1987 0.696 0.883
+## 2   30 0.0 2004 0.681 0.876
+## 6   28 0.0 1215 0.710 1.444
+## 7   27 0.0 1200 0.718 1.462
+## 8   28 0.0 1689 0.712 1.039
+## 9   29 0.5 1701 0.711 1.032</code></pre>
+<p>Education level is slightly right-skewed. Socioeconomic status is
+concentrated towards higher levels. Sex is slightly skewed towards
+females.</p>
+<pre class="r"><code>par(mfrow = c(1, 3))
+
+hist(dc$EDUC, 
+     breaks = 10, 
+     main = &quot;Histogram of Education Level&quot;, 
+     xlab = &quot;Years of Education&quot;,
+     ylab = &quot;Number of Individuals&quot;,
+     col = &quot;lightblue&quot;,
+     border = &quot;white&quot;)
+
+barplot(table(dc$SES),
+        main = &quot;Barplot of Socioeconomic Status&quot;,
+        xlab = &quot;SES&quot;,
+        ylab = &quot;Number of Individuals&quot;,
+        col = &quot;lightblue&quot;,
+        border = &quot;white&quot;)
+
+barplot(table(dc$M.F), 
+        main = &quot;Barplot of Sex&quot;, 
+        xlab = &quot;Sex&quot;, 
+        ylab = &quot;Number of Individuals&quot;, 
+        col = c(&quot;pink&quot;, &quot;lightblue&quot;),
+        border = &quot;white&quot;)</code></pre>
+<p><img src="Report_files/figure-html/unnamed-chunk-2-1.svg" width="576" /></p>
+<p>MMSE is heavily left-skewed. Comparing initial visit to final visit
+MMSE distribution, we see a decline in average MMSE.</p>
+<pre class="r"><code>initial_visits &lt;- dc[ave(dc$Visit, dc$Subject.ID, FUN = min) == dc$Visit, ]
+final_visits &lt;- dc[ave(dc$Visit, dc$Subject.ID, FUN = max) == dc$Visit, ]
+
+#Set layout: 1 row, 2 columns
+par(mfrow = c(1, 2))
+
+#Histogram for initial visits
+hist(initial_visits$MMSE,
+     main = &quot;Initial Visit MMSE&quot;, 
+     breaks = 0:30,
+     xlab = &quot;MMSE&quot;,
+     ylab = &quot;Number of Individuals&quot;,
+     col = &quot;lightblue&quot;, 
+     border = &quot;white&quot;, 
+     xlim = c(0, 30))
+
+#Histogram for final visits
+hist(final_visits$MMSE,
+     main = &quot;Final Visit MMSE&quot;, 
+     breaks = 0:30,
+     xlab = &quot;MMSE&quot;,
+     ylab = &quot;Number of Individuals&quot;,
+     col = &quot;lightblue&quot;, 
+     border = &quot;white&quot;, 
+     xlim = c(0, 30))</code></pre>
+<p><img src="Report_files/figure-html/unnamed-chunk-3-1.svg" width="576" /></p>
+<p>We plot the longitudinal trajectories of nWBV, recreating the same
+plot as shown in [1]:</p>
+<pre class="r"><code>cdr_colors &lt;- c(&quot;0&quot; = &quot;lightblue&quot;, &quot;0.5&quot; = &quot;violet&quot;, &quot;1&quot; = &quot;darkblue&quot;)
+
+#nWBV trajectories
+xyplot(nWBV ~ Age, data = dc,
+       groups = Subject.ID,
+       type = &quot;b&quot;,
+       lwd = 1,
+       pch = 16,
+       col = cdr_colors[as.character(dc$CDR)],
+       xlab = &quot;Age (years)&quot;,
+       ylab = &quot;nWBV (%)&quot;,
+       main = &quot;Longitudinal trajectories of nWBV per subject by CDR group&quot;,
+       key = list(text = list(c(&quot;CDR 0&quot;, &quot;CDR 0.5&quot;, &quot;CDR 1&quot;)),
+                  points = list(pch = 16, col = c(&quot;lightblue&quot;, &quot;violet&quot;, &quot;darkblue&quot;)),
+                  columns = 3))</code></pre>
+<p><img src="Report_files/figure-html/unnamed-chunk-4-1.svg" width="576" /></p>
+<p>And we analogously plot the longitudinal trajectories of MMSE:</p>
+<pre class="r"><code>#MMSE trajectories
+xyplot(MMSE ~ Age, data = dc,
+       groups = Subject.ID,
+       type = &quot;b&quot;,
+       lwd = 1,
+       pch = 16,
+       col = cdr_colors[as.character(dc$CDR)],
+       xlab = &quot;Age (years)&quot;,
+       ylab = &quot;MMSE&quot;,
+       main = &quot;Longitudinal trajectories of MMSE per subject by CDR group&quot;,
+       key = list(text = list(c(&quot;CDR 0&quot;, &quot;CDR 0.5&quot;, &quot;CDR 1&quot;)),
+                  points = list(pch = 16, col = c(&quot;lightblue&quot;, &quot;violet&quot;, &quot;darkblue&quot;)),
+                  columns = 3))</code></pre>
+<p><img src="Report_files/figure-html/unnamed-chunk-5-1.svg" width="576" /></p>
+<div style="page-break-before: always;">
+
+</div>
+</div>
+<div id="results" class="section level1">
+<h1>Results</h1>
+<div id="modelling-random-effects" class="section level2">
+<h2>Modelling Random Effects</h2>
+<p>For our fixed effects, we tentatively include terms nWBV, Age, EDUC,
+SES, M.F. We begin by testing random effects. For random effects, we
+consider time-variant variables; in this case, nWBV and Age. We make the
+reasonable assumption that EDUC and SES are time-invariant for an
+elderly population.</p>
+<p>Between random effects 1, 1 + Age and 1 + nWBV, ANOVA testing
+produces the lowest AIC for 1 + nWBV. So we proceed with the following
+model:</p>
+<pre class="r"><code>fit2 &lt;- lme(MMSE ~ nWBV + Age + M.F + SES + EDUC, 
+            data = dc, 
+            random = ~ 1 + nWBV | Subject.ID,
+            correlation = corAR1(form = ~ 1 | Subject.ID),
+            control = lmeControl(opt = &quot;optim&quot;, maxIter = 200, msMaxIter = 200))</code></pre>
+<p>Examining this model produces p-values &gt; 0.05 for all predictors
+other than nWBV.</p>
+<pre class="r"><code>summary(fit2)</code></pre>
+<pre><code>## Linear mixed-effects model fit by REML
+##   Data: dc 
+##        AIC    BIC    logLik
+##   1632.026 1674.4 -805.0128
+## 
+## Random effects:
+##  Formula: ~1 + nWBV | Subject.ID
+##  Structure: General positive-definite, Log-Cholesky parametrization
+##             StdDev    Corr  
+## (Intercept) 30.125603 (Intr)
+## nWBV        38.256604 -1    
+## Residual     1.882025       
+## 
+## Correlation Structure: AR(1)
+##  Formula: ~1 | Subject.ID 
+##  Parameter estimate(s):
+##       Phi 
+## 0.3503827 
+## Fixed effects:  MMSE ~ nWBV + Age + M.F + SES + EDUC 
+##                 Value Std.Error  DF   t-value p-value
+## (Intercept)  0.294103  7.157217 210  0.041092  0.9673
+## nWBV        29.823705  7.116504 210  4.190781  0.0000
+## Age          0.043803  0.031988 210  1.369333  0.1724
+## M.FM        -0.666225  0.442148 138 -1.506791  0.1342
+## SES          0.093875  0.262842 138  0.357152  0.7215
+## EDUC         0.138319  0.104192 138  1.327536  0.1865
+##  Correlation: 
+##      (Intr) nWBV   Age    M.FM   SES   
+## nWBV -0.947                            
+## Age  -0.786  0.597                     
+## M.FM -0.223  0.232  0.148              
+## SES  -0.027  0.103  0.017  0.093       
+## EDUC -0.097 -0.072  0.010 -0.138 -0.696
+## 
+## Standardized Within-Group Residuals:
+##        Min         Q1        Med         Q3        Max 
+## -3.9190676 -0.2946575  0.1071537  0.4679001  2.9629229 
+## 
+## Number of Observations: 354
+## Number of Groups: 142</code></pre>
+<div style="page-break-before: always;">
+
+</div>
+</div>
+<div id="modelling-fixed-effects" class="section level2">
+<h2>Modelling Fixed Effects</h2>
+<p>For our fixed effects, we now consider interaction terms. Plausible
+three-way interaction terms and corresponding hypotheses for
+consideration include the following:</p>
+<ol style="list-style-type: decimal">
+<li>nWBV * Age * SES: Higher SES allows for access to higher quality
+healthcare, slowing decay in nWBV during the aging process</li>
+<li>nWBV * Age * M.F: Decay in nWBV during the aging process differs
+between male and female for biological reasons</li>
+<li>nWBV * Age * EDUC: Higher education slows the decay in nWBV during
+the aging process</li>
+</ol>
+<p>Building separate models considering each interaction term and
+running ANOVA tests revealed the following model to have the lowest
+AIC:</p>
+<pre class="r"><code>fit3 &lt;- lme(MMSE ~ nWBV + Age + M.F + SES + EDUC + nWBV * Age * SES
+            + nWBV * Age + nWBV * SES + Age * SES, 
+            data = dc, 
+            random = ~ 1 + nWBV | Subject.ID,
+            correlation = corAR1(form = ~ 1 | Subject.ID),
+            control = lmeControl(opt = &quot;optim&quot;, maxIter = 200, msMaxIter = 200))</code></pre>
+<p>However, all predictors in this model have p-value &gt; 0.05, making
+it unsuitable for causal inference:</p>
+<pre class="r"><code>summary(fit3)</code></pre>
+<pre><code>## Linear mixed-effects model fit by REML
+##   Data: dc 
+##        AIC      BIC    logLik
+##   1679.897 1737.507 -824.9487
+## 
+## Random effects:
+##  Formula: ~1 + nWBV | Subject.ID
+##  Structure: General positive-definite, Log-Cholesky parametrization
+##             StdDev    Corr  
+## (Intercept) 0.1954965 (Intr)
+## nWBV        0.2027344 -0.371
+## Residual    3.2745790       
+## 
+## Correlation Structure: AR(1)
+##  Formula: ~1 | Subject.ID 
+##  Parameter estimate(s):
+##       Phi 
+## 0.7649814 
+## Fixed effects:  MMSE ~ nWBV + Age + M.F + SES + EDUC + nWBV * Age * SES + nWBV *      Age + nWBV * SES + Age * SES 
+##                   Value Std.Error  DF    t-value p-value
+## (Intercept)  -109.64519  93.31457 206 -1.1750061  0.2413
+## nWBV          159.75950 127.16399 206  1.2563266  0.2104
+## Age             1.02400   1.22193 206  0.8380188  0.4030
+## M.FM           -0.50329   0.53906 138 -0.9336385  0.3521
+## SES            29.71438  32.38970 138  0.9174020  0.3605
+## EDUC            0.20386   0.12943 138  1.5750715  0.1175
+## nWBV:Age       -1.10089   1.68083 206 -0.6549678  0.5132
+## nWBV:SES      -36.11864  44.43754 206 -0.8127956  0.4173
+## Age:SES        -0.26514   0.42249 206 -0.6275692  0.5310
+## nWBV:Age:SES    0.30722   0.58460 206  0.5255143  0.5998
+##  Correlation: 
+##              (Intr) nWBV   Age    M.FM   SES    EDUC   nWBV:Ag nWBV:S Ag:SES
+## nWBV         -0.997                                                         
+## Age          -0.991  0.994                                                  
+## M.FM          0.115 -0.120 -0.126                                           
+## SES          -0.919  0.920  0.910 -0.153                                    
+## EDUC         -0.090  0.065  0.077 -0.091  0.060                             
+## nWBV:Age      0.982 -0.991 -0.997  0.129 -0.905 -0.066                      
+## nWBV:SES      0.913 -0.920 -0.910  0.151 -0.997 -0.057  0.911               
+## Age:SES       0.912 -0.918 -0.920  0.148 -0.990 -0.066  0.921   0.993       
+## nWBV:Age:SES -0.900  0.912  0.914 -0.145  0.981  0.055 -0.921  -0.990 -0.997
+## 
+## Standardized Within-Group Residuals:
+##        Min         Q1        Med         Q3        Max 
+## -6.6203240 -0.2772330  0.2388486  0.6347886  1.7999549 
+## 
+## Number of Observations: 354
+## Number of Groups: 142</code></pre>
+<p>We discard three-way interaction terms and instead consider two-way
+interaction terms. Plausible two-way interaction terms and corresponding
+hypotheses include the following:</p>
+<ol style="list-style-type: decimal">
+<li>nWBV * Age: Brain volume changes with age</li>
+<li>nWBV * EDUC: Education acts as a buffer against brain volume
+loss</li>
+<li>nWBV * SES : Higher SES allows for better healthcare access,
+reducing brain volume loss</li>
+<li>nWBV * M.F : Sex affects change in brain volume for biological
+reasons</li>
+<li>Age * EDUC : Education acts as a buffer against age effects</li>
+<li>Age * M.F : Aging affects males and females differently</li>
+<li>Age * SES : Higher SES allows for better healthcare access, reducing
+aging effects</li>
+</ol>
+<p>Modelling these hypotheses and assessing AIC values from ANOVA tests
+found this model to be the best performing:</p>
+<pre class="r"><code>fit5 &lt;- lme(MMSE ~ nWBV + Age + SES + nWBV * SES + Age * SES, 
+            data = dc, 
+            random = ~ 1 + nWBV | Subject.ID,
+            correlation = corAR1(form = ~ 1 | Subject.ID),
+            control = lmeControl(opt = &quot;optim&quot;, maxIter = 200, msMaxIter = 200))</code></pre>
+<p>And we see that all terms here are significant (p-value &lt; 0.05).
+Note that sex and years of education were dropped as ANOVA testing found
+them to be insignificant:</p>
+<pre class="r"><code>summary(fit5)</code></pre>
+<pre><code>## Linear mixed-effects model fit by REML
+##   Data: dc 
+##        AIC      BIC    logLik
+##   1621.422 1663.797 -799.7112
+## 
+## Random effects:
+##  Formula: ~1 + nWBV | Subject.ID
+##  Structure: General positive-definite, Log-Cholesky parametrization
+##             StdDev    Corr  
+## (Intercept) 32.020859 (Intr)
+## nWBV        40.961855 -1    
+## Residual     1.844624       
+## 
+## Correlation Structure: AR(1)
+##  Formula: ~1 | Subject.ID 
+##  Parameter estimate(s):
+##      Phi 
+## 0.312536 
+## Fixed effects:  MMSE ~ nWBV + Age + SES + nWBV * SES + Age * SES 
+##                 Value Std.Error  DF   t-value p-value
+## (Intercept) -54.94656 16.877249 208 -3.255658  0.0013
+## nWBV         85.06516 16.963782 208  5.014516  0.0000
+## Age           0.24594  0.079577 208  3.090611  0.0023
+## SES          21.81791  6.125116 140  3.562041  0.0005
+## nWBV:SES    -21.04513  6.232539 208 -3.376654  0.0009
+## Age:SES      -0.07695  0.028539 208 -2.696233  0.0076
+##  Correlation: 
+##          (Intr) nWBV   Age    SES    nWBV:S
+## nWBV     -0.958                            
+## Age      -0.785  0.575                     
+## SES      -0.919  0.884  0.716              
+## nWBV:SES  0.873 -0.916 -0.518 -0.958       
+## Age:SES   0.725 -0.531 -0.926 -0.775  0.563
+## 
+## Standardized Within-Group Residuals:
+##        Min         Q1        Med         Q3        Max 
+## -3.9307210 -0.2692234  0.1472228  0.4643059  2.8280703 
+## 
+## Number of Observations: 354
+## Number of Groups: 142</code></pre>
+<p>Inspecting the random effects coefficients reveals that the
+correlation between the random slope and intercept is -1, which is
+suggestive of numerical instability in the random effects.
+Within-subject centering made no improvements, but including non-linear
+terms was successful in correlation improvement.</p>
+<div style="page-break-before: always;">
+
+</div>
+</div>
+<div id="non-linear-terms" class="section level2">
+<h2>Non-linear Terms</h2>
+<p>To introduce non-linearity to the model, we initially added a squared
+nWBV term to the fixed effects:</p>
+<pre class="r"><code>dc$nWBV_scaled &lt;- scale(dc$nWBV)[,1]
+dc$nWBV_sq_scaled &lt;- dc$nWBV_scaled^2
+
+fit6 &lt;- lmer(MMSE ~ nWBV_scaled + nWBV_sq_scaled + Age + SES + 
+             nWBV_scaled * SES + Age * SES + 
+             (1 + nWBV_scaled | Subject.ID),
+             data = dc)</code></pre>
+<p>All terms are significant (p-value &lt; 0.05), and the correlation in
+the random effects becomes a slightly more stable -0.96:</p>
+<pre class="r"><code>summary(fit6)</code></pre>
+<pre><code>## Linear mixed model fit by REML. t-tests use Satterthwaite&#39;s method [
+## lmerModLmerTest]
+## Formula: MMSE ~ nWBV_scaled + nWBV_sq_scaled + Age + SES + nWBV_scaled *  
+##     SES + Age * SES + (1 + nWBV_scaled | Subject.ID)
+##    Data: dc
+## 
+## REML criterion at convergence: 1617.9
+## 
+## Scaled residuals: 
+##     Min      1Q  Median      3Q     Max 
+## -4.1474 -0.2784  0.1098  0.4405  3.2477 
+## 
+## Random effects:
+##  Groups     Name        Variance Std.Dev. Corr 
+##  Subject.ID (Intercept) 5.347    2.312         
+##             nWBV_scaled 2.600    1.612    -0.96
+##  Residual               2.660    1.631         
+## Number of obs: 354, groups:  Subject.ID, 142
+## 
+## Fixed effects:
+##                  Estimate Std. Error        df t value Pr(&gt;|t|)    
+## (Intercept)       7.78698    5.88637 154.69655   1.323 0.187826    
+## nWBV_scaled       3.59539    0.63605 139.35550   5.653  8.6e-08 ***
+## nWBV_sq_scaled   -0.34260    0.14499  89.00378  -2.363 0.020309 *  
+## Age               0.24043    0.07588 147.81877   3.169 0.001861 ** 
+## SES               6.92411    2.09132 147.38808   3.311 0.001170 ** 
+## nWBV_scaled:SES  -0.87827    0.22917 136.90383  -3.832 0.000193 ***
+## Age:SES          -0.08314    0.02711 142.29317  -3.067 0.002587 ** 
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1
+## 
+## Correlation of Fixed Effects:
+##             (Intr) nWBV_s nWBV__ Age    SES    nWBV_:
+## nWBV_scaled -0.598                                   
+## nWBV_sq_scl -0.110 -0.176                            
+## Age         -0.995  0.556  0.097                     
+## SES         -0.924  0.561  0.050  0.923              
+## nWBV_sc:SES  0.559 -0.907  0.026 -0.521 -0.609       
+## Age:SES      0.919 -0.519 -0.048 -0.926 -0.995  0.565</code></pre>
+<pre class="r"><code>anova(fit6)</code></pre>
+<pre><code>## Type III Analysis of Variance Table with Satterthwaite&#39;s method
+##                 Sum Sq Mean Sq NumDF   DenDF F value    Pr(&gt;F)    
+## nWBV_scaled     84.990  84.990     1 139.356 31.9532 8.595e-08 ***
+## nWBV_sq_scaled  14.851  14.851     1  89.004  5.5834 0.0203093 *  
+## Age             26.706  26.706     1 147.819 10.0406 0.0018612 ** 
+## SES             29.157  29.157     1 147.388 10.9619 0.0011696 ** 
+## nWBV_scaled:SES 39.067  39.067     1 136.904 14.6876 0.0001926 ***
+## Age:SES         25.023  25.023     1 142.293  9.4076 0.0025871 ** 
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1</code></pre>
+<p>Using splines more effectively captured non-linearity:</p>
+<pre class="r"><code>dc$nWBV_scaled &lt;- scale(dc$nWBV)[,1]
+
+fit_spline &lt;- lmer(MMSE ~ ns(nWBV_scaled, df=4) + Age + SES + nWBV_scaled*SES + Age:SES + 
+                   (1 + nWBV_scaled | Subject.ID),
+                   data = dc,
+                   REML = TRUE)</code></pre>
+<pre><code>## fixed-effect model matrix is rank deficient so dropping 1 column / coefficient</code></pre>
+<p>And again, we see that all terms are significant (p-values &lt; 0.05)
+with correlation in the random effects reduced to -0.95:</p>
+<pre class="r"><code>summary(fit_spline)</code></pre>
+<pre><code>## Linear mixed model fit by REML. t-tests use Satterthwaite&#39;s method [
+## lmerModLmerTest]
+## Formula: MMSE ~ ns(nWBV_scaled, df = 4) + Age + SES + nWBV_scaled * SES +  
+##     Age:SES + (1 + nWBV_scaled | Subject.ID)
+##    Data: dc
+## 
+## REML criterion at convergence: 1598.2
+## 
+## Scaled residuals: 
+##     Min      1Q  Median      3Q     Max 
+## -3.8821 -0.3099  0.1315  0.4339  3.1968 
+## 
+## Random effects:
+##  Groups     Name        Variance Std.Dev. Corr 
+##  Subject.ID (Intercept) 5.511    2.347         
+##             nWBV_scaled 2.717    1.648    -0.95
+##  Residual               2.542    1.594         
+## Number of obs: 354, groups:  Subject.ID, 142
+## 
+## Fixed effects:
+##                           Estimate Std. Error        df t value Pr(&gt;|t|)    
+## (Intercept)               -6.06696    7.01980 169.91995  -0.864 0.388661    
+## ns(nWBV_scaled, df = 4)1  12.59680    1.98711 238.51073   6.339 1.14e-09 ***
+## ns(nWBV_scaled, df = 4)2  12.74060    2.12443 149.17160   5.997 1.45e-08 ***
+## ns(nWBV_scaled, df = 4)3  28.71832    4.56269 241.57876   6.294 1.44e-09 ***
+## ns(nWBV_scaled, df = 4)4  16.68518    3.08572 124.96132   5.407 3.13e-07 ***
+## Age                        0.25381    0.07641 152.53105   3.322 0.001120 ** 
+## SES                        7.11217    2.10048 149.27436   3.386 0.000907 ***
+## SES:nWBV_scaled           -0.90454    0.23153 134.96978  -3.907 0.000147 ***
+## Age:SES                   -0.08572    0.02722 144.25897  -3.149 0.001992 ** 
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1
+## 
+## Correlation of Fixed Effects:
+##              (Intr) n(WBV_,d=4)1 n(WBV_,d=4)2 n(WBV_,d=4)3 n(WBV_,d=4)4 Age   
+## n(WBV_,d=4)1 -0.639                                                           
+## n(WBV_,d=4)2 -0.700  0.871                                                    
+## n(WBV_,d=4)3 -0.684  0.953        0.895                                       
+## n(WBV_,d=4)4 -0.718  0.773        0.769        0.797                          
+## Age          -0.953  0.395        0.480        0.445        0.562             
+## SES          -0.894  0.397        0.499        0.440        0.538        0.921
+## SES:nWBV_sc   0.667 -0.684       -0.831       -0.726       -0.850       -0.517
+## Age:SES       0.881 -0.368       -0.461       -0.408       -0.500       -0.925
+##              SES    SES:WB
+## n(WBV_,d=4)1              
+## n(WBV_,d=4)2              
+## n(WBV_,d=4)3              
+## n(WBV_,d=4)4              
+## Age                       
+## SES                       
+## SES:nWBV_sc  -0.605       
+## Age:SES      -0.995  0.561
+## fit warnings:
+## fixed-effect model matrix is rank deficient so dropping 1 column / coefficient</code></pre>
+<pre class="r"><code>anova(fit_spline)</code></pre>
+<pre><code>## Type III Analysis of Variance Table with Satterthwaite&#39;s method
+##                          Sum Sq Mean Sq NumDF  DenDF F value    Pr(&gt;F)    
+## ns(nWBV_scaled, df = 4) 105.569  26.392     4 159.90 10.3835 1.679e-07 ***
+## Age                      28.043  28.043     1 152.53 11.0330 0.0011202 ** 
+## SES                      29.141  29.141     1 149.27 11.4649 0.0009066 ***
+## SES:nWBV_scaled          38.796  38.796     1 134.97 15.2634 0.0001472 ***
+## Age:SES                  25.204  25.204     1 144.26  9.9162 0.0019916 ** 
+## nWBV_scaled                                                               
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1</code></pre>
+<p>Purely by AIC, our model which does not account for non-linearity
+performs the best.</p>
+<pre class="r"><code>anova(fit_spline, fit6)</code></pre>
+<pre><code>## refitting model(s) with ML (instead of REML)</code></pre>
+<pre><code>## Data: dc
+## Models:
+## fit6: MMSE ~ nWBV_scaled + nWBV_sq_scaled + Age + SES + nWBV_scaled * SES + Age * SES + (1 + nWBV_scaled | Subject.ID)
+## fit_spline: MMSE ~ ns(nWBV_scaled, df = 4) + Age + SES + nWBV_scaled * SES + Age:SES + (1 + nWBV_scaled | Subject.ID)
+##            npar    AIC    BIC  logLik -2*log(L)  Chisq Df Pr(&gt;Chisq)  
+## fit6         11 1620.7 1663.3 -799.35    1598.7                       
+## fit_spline   13 1616.6 1666.9 -795.31    1590.6 8.0868  2    0.01754 *
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1</code></pre>
+<pre class="r"><code>AIC(fit_spline, fit6, fit5)</code></pre>
+<pre><code>## Warning in AIC.default(fit_spline, fit6, fit5): models are not all fitted to
+## the same number of observations</code></pre>
+<pre><code>##            df      AIC
+## fit_spline 13 1624.226
+## fit6       11 1639.894
+## fit5       11 1621.422</code></pre>
+<div style="page-break-before: always;">
+
+</div>
+</div>
+</div>
+<div id="discussion" class="section level1">
+<h1>Discussion</h1>
+<div id="model-interpretation" class="section level2">
+<h2>Model Interpretation</h2>
+<p>We discuss the interpretation of the three models we constructed in
+the Results section. We will refer to the model with only linear terms
+(fit5) as Model 1. We will refer to the model with squared nWBV (fit6)
+as Model 2. We will refer to the model with splines (fit_spline) as
+Model 3.</p>
+<p>Beginning with Model 1:</p>
+<pre class="r"><code>summary(fit5)</code></pre>
+<pre><code>## Linear mixed-effects model fit by REML
+##   Data: dc 
+##        AIC      BIC    logLik
+##   1621.422 1663.797 -799.7112
+## 
+## Random effects:
+##  Formula: ~1 + nWBV | Subject.ID
+##  Structure: General positive-definite, Log-Cholesky parametrization
+##             StdDev    Corr  
+## (Intercept) 32.020859 (Intr)
+## nWBV        40.961855 -1    
+## Residual     1.844624       
+## 
+## Correlation Structure: AR(1)
+##  Formula: ~1 | Subject.ID 
+##  Parameter estimate(s):
+##      Phi 
+## 0.312536 
+## Fixed effects:  MMSE ~ nWBV + Age + SES + nWBV * SES + Age * SES 
+##                 Value Std.Error  DF   t-value p-value
+## (Intercept) -54.94656 16.877249 208 -3.255658  0.0013
+## nWBV         85.06516 16.963782 208  5.014516  0.0000
+## Age           0.24594  0.079577 208  3.090611  0.0023
+## SES          21.81791  6.125116 140  3.562041  0.0005
+## nWBV:SES    -21.04513  6.232539 208 -3.376654  0.0009
+## Age:SES      -0.07695  0.028539 208 -2.696233  0.0076
+##  Correlation: 
+##          (Intr) nWBV   Age    SES    nWBV:S
+## nWBV     -0.958                            
+## Age      -0.785  0.575                     
+## SES      -0.919  0.884  0.716              
+## nWBV:SES  0.873 -0.916 -0.518 -0.958       
+## Age:SES   0.725 -0.531 -0.926 -0.775  0.563
+## 
+## Standardized Within-Group Residuals:
+##        Min         Q1        Med         Q3        Max 
+## -3.9307210 -0.2692234  0.1472228  0.4643059  2.8280703 
+## 
+## Number of Observations: 354
+## Number of Groups: 142</code></pre>
+<p>In the random effects, the high standard deviation for nWBV is
+indicative of variance in baseline nWBV by subject. The correlation of
+-1 suggests that the slope an intercept are strongly negatively
+correlated, but as discussed earlier is indicative of numerical issues,
+so we will not make an attempt to interpret it here.</p>
+<p>In the fixed effects, the coefficient for nWBV (~85.07) suggests that
+higher nWBV is associated with higher MMSE, which is to be expected. The
+coefficient for Age (~0.25) suggests that higher age is associated with
+higher MMSE. This is something to be cautious of, as one would expect
+cognitive ability to decrease with age; this could also allude to a
+limitation in the data. Though there is an interaction term involving
+Age; the coefficient for Age:SES (~-0.08) suggests that the affect of
+age on MMSE decreases as socioeconomic status increases, which is
+sensible, since higher socioeconomic status allows for better healthcare
+access, which one would expect would slow down the affects of age. The
+coefficient for SES (~21.82) suggests that higher SES is associated with
+higher MMSE, which is again sensible for reasons of better healthcare
+access. Lastly, the coefficient for nWBV:SES (~-21.05) suggests that the
+positive effect of nWBV decreases as socioeconiomic status increases.
+Note that all coefficients are significant with p-value &lt; 0.01.</p>
+<p>Now we consider Model 2:</p>
+<pre class="r"><code>summary(fit6)</code></pre>
+<pre><code>## Linear mixed model fit by REML. t-tests use Satterthwaite&#39;s method [
+## lmerModLmerTest]
+## Formula: MMSE ~ nWBV_scaled + nWBV_sq_scaled + Age + SES + nWBV_scaled *  
+##     SES + Age * SES + (1 + nWBV_scaled | Subject.ID)
+##    Data: dc
+## 
+## REML criterion at convergence: 1617.9
+## 
+## Scaled residuals: 
+##     Min      1Q  Median      3Q     Max 
+## -4.1474 -0.2784  0.1098  0.4405  3.2477 
+## 
+## Random effects:
+##  Groups     Name        Variance Std.Dev. Corr 
+##  Subject.ID (Intercept) 5.347    2.312         
+##             nWBV_scaled 2.600    1.612    -0.96
+##  Residual               2.660    1.631         
+## Number of obs: 354, groups:  Subject.ID, 142
+## 
+## Fixed effects:
+##                  Estimate Std. Error        df t value Pr(&gt;|t|)    
+## (Intercept)       7.78698    5.88637 154.69655   1.323 0.187826    
+## nWBV_scaled       3.59539    0.63605 139.35550   5.653  8.6e-08 ***
+## nWBV_sq_scaled   -0.34260    0.14499  89.00378  -2.363 0.020309 *  
+## Age               0.24043    0.07588 147.81877   3.169 0.001861 ** 
+## SES               6.92411    2.09132 147.38808   3.311 0.001170 ** 
+## nWBV_scaled:SES  -0.87827    0.22917 136.90383  -3.832 0.000193 ***
+## Age:SES          -0.08314    0.02711 142.29317  -3.067 0.002587 ** 
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1
+## 
+## Correlation of Fixed Effects:
+##             (Intr) nWBV_s nWBV__ Age    SES    nWBV_:
+## nWBV_scaled -0.598                                   
+## nWBV_sq_scl -0.110 -0.176                            
+## Age         -0.995  0.556  0.097                     
+## SES         -0.924  0.561  0.050  0.923              
+## nWBV_sc:SES  0.559 -0.907  0.026 -0.521 -0.609       
+## Age:SES      0.919 -0.519 -0.048 -0.926 -0.995  0.565</code></pre>
+<pre class="r"><code>anova(fit6)</code></pre>
+<pre><code>## Type III Analysis of Variance Table with Satterthwaite&#39;s method
+##                 Sum Sq Mean Sq NumDF   DenDF F value    Pr(&gt;F)    
+## nWBV_scaled     84.990  84.990     1 139.356 31.9532 8.595e-08 ***
+## nWBV_sq_scaled  14.851  14.851     1  89.004  5.5834 0.0203093 *  
+## Age             26.706  26.706     1 147.819 10.0406 0.0018612 ** 
+## SES             29.157  29.157     1 147.388 10.9619 0.0011696 ** 
+## nWBV_scaled:SES 39.067  39.067     1 136.904 14.6876 0.0001926 ***
+## Age:SES         25.023  25.023     1 142.293  9.4076 0.0025871 ** 
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1</code></pre>
+<p>In the random effects, the highly negative correlation between slope
+and intercept (-0.96) suggests that subjects with higher baseline MMSE
+experience greater decline in MMSE with loss of brain volume.</p>
+<p>In the fixed effects, the coefficient for nWBV (~3.60) suggests that
+higher nWBV is associated with higher MMSE. However, the coefficient for
+squared nWBV (~-0.34) dampens this effect. In particular, since nWBV
+ranges from 0 to 1, squaring nWBV will reduce it, so this dampening
+effect will be lower for higher nWBV and higher for lower nWBV. Similar
+to Model 1, the coefficient for Age (~0.24) suggests a positive effect
+of age on MMSE, and the coefficient for SES (~6.92) suggests a positive
+effect of SES on MMSE. The interpretation of the interaction
+coefficients for nWBV:SES (~-0.88) and Age:SES (~-.008) are both the
+same as the interpretations in Model 1; as SES increases, the effect of
+nWBV and effect of age decreases. Again, all coefficients are
+significant with p-value ~ 0.02 for squared nWBV and p-value &lt; 0.01
+for all other terms.</p>
+<p>Lastly we consider Model 3:</p>
+<pre class="r"><code>summary(fit_spline)</code></pre>
+<pre><code>## Linear mixed model fit by REML. t-tests use Satterthwaite&#39;s method [
+## lmerModLmerTest]
+## Formula: MMSE ~ ns(nWBV_scaled, df = 4) + Age + SES + nWBV_scaled * SES +  
+##     Age:SES + (1 + nWBV_scaled | Subject.ID)
+##    Data: dc
+## 
+## REML criterion at convergence: 1598.2
+## 
+## Scaled residuals: 
+##     Min      1Q  Median      3Q     Max 
+## -3.8821 -0.3099  0.1315  0.4339  3.1968 
+## 
+## Random effects:
+##  Groups     Name        Variance Std.Dev. Corr 
+##  Subject.ID (Intercept) 5.511    2.347         
+##             nWBV_scaled 2.717    1.648    -0.95
+##  Residual               2.542    1.594         
+## Number of obs: 354, groups:  Subject.ID, 142
+## 
+## Fixed effects:
+##                           Estimate Std. Error        df t value Pr(&gt;|t|)    
+## (Intercept)               -6.06696    7.01980 169.91995  -0.864 0.388661    
+## ns(nWBV_scaled, df = 4)1  12.59680    1.98711 238.51073   6.339 1.14e-09 ***
+## ns(nWBV_scaled, df = 4)2  12.74060    2.12443 149.17160   5.997 1.45e-08 ***
+## ns(nWBV_scaled, df = 4)3  28.71832    4.56269 241.57876   6.294 1.44e-09 ***
+## ns(nWBV_scaled, df = 4)4  16.68518    3.08572 124.96132   5.407 3.13e-07 ***
+## Age                        0.25381    0.07641 152.53105   3.322 0.001120 ** 
+## SES                        7.11217    2.10048 149.27436   3.386 0.000907 ***
+## SES:nWBV_scaled           -0.90454    0.23153 134.96978  -3.907 0.000147 ***
+## Age:SES                   -0.08572    0.02722 144.25897  -3.149 0.001992 ** 
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1
+## 
+## Correlation of Fixed Effects:
+##              (Intr) n(WBV_,d=4)1 n(WBV_,d=4)2 n(WBV_,d=4)3 n(WBV_,d=4)4 Age   
+## n(WBV_,d=4)1 -0.639                                                           
+## n(WBV_,d=4)2 -0.700  0.871                                                    
+## n(WBV_,d=4)3 -0.684  0.953        0.895                                       
+## n(WBV_,d=4)4 -0.718  0.773        0.769        0.797                          
+## Age          -0.953  0.395        0.480        0.445        0.562             
+## SES          -0.894  0.397        0.499        0.440        0.538        0.921
+## SES:nWBV_sc   0.667 -0.684       -0.831       -0.726       -0.850       -0.517
+## Age:SES       0.881 -0.368       -0.461       -0.408       -0.500       -0.925
+##              SES    SES:WB
+## n(WBV_,d=4)1              
+## n(WBV_,d=4)2              
+## n(WBV_,d=4)3              
+## n(WBV_,d=4)4              
+## Age                       
+## SES                       
+## SES:nWBV_sc  -0.605       
+## Age:SES      -0.995  0.561
+## fit warnings:
+## fixed-effect model matrix is rank deficient so dropping 1 column / coefficient</code></pre>
+<pre class="r"><code>anova(fit_spline)</code></pre>
+<pre><code>## Type III Analysis of Variance Table with Satterthwaite&#39;s method
+##                          Sum Sq Mean Sq NumDF  DenDF F value    Pr(&gt;F)    
+## ns(nWBV_scaled, df = 4) 105.569  26.392     4 159.90 10.3835 1.679e-07 ***
+## Age                      28.043  28.043     1 152.53 11.0330 0.0011202 ** 
+## SES                      29.141  29.141     1 149.27 11.4649 0.0009066 ***
+## SES:nWBV_scaled          38.796  38.796     1 134.97 15.2634 0.0001472 ***
+## Age:SES                  25.204  25.204     1 144.26  9.9162 0.0019916 ** 
+## nWBV_scaled                                                               
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1</code></pre>
+<p>The interpretation of random effects is similar to that of Model 2,
+with Model 3 having correlation (-0.95) between slope and intercept.</p>
+<p>In the fixed effects, the coefficients for Age, SES, SES:nWBV and
+Age:SES are similar to those in Model 2, and can be interpreted in the
+same way. The high, positive coefficients for the nWBV spline terms
+suggest that the relationship between MMSE and nWBV is both positive and
+highly non-linear. All coefficients are statistically significant with
+p-values &lt; 0.01.</p>
+<p>In summary, our models all agree that higher brain volume, higher
+socioeconomic status, and higher age predict higher MMSE, with age
+having a smaller effect than brain volume and socioeconomic status, and
+the effects of brain volume and age being dampened through interactions
+with socioeconomic status.</p>
+<div style="page-break-before: always;">
+
+</div>
+</div>
+<div id="comparing-mean-trajectory-slopes" class="section level2">
+<h2>Comparing Mean Trajectory Slopes</h2>
+<p>We compute the mean of the slopes of the trajectory lines stratified
+by CDR from our MMSE trajectory plot constructed in the Dataset
+section:</p>
+<pre class="r"><code>dc_copy &lt;- dc
+
+subject_slopes &lt;- dc_copy %&gt;%
+  group_by(Subject.ID, CDR) %&gt;%
+  filter(n() &gt; 1) %&gt;%  # need at least two points per subject
+  summarise(
+    slope = {
+      fit &lt;- lm(MMSE ~ Age, data = cur_data())
+      coef(fit)[&quot;Age&quot;]
+    },
+    .groups = &quot;drop&quot;
+  )</code></pre>
+<pre><code>## Warning: There was 1 warning in `summarise()`.
+## ℹ In argument: `slope = { ... }`.
+## ℹ In group 1: `Subject.ID = &quot;OAS2_0001&quot;` `CDR = 0`.
+## Caused by warning:
+## ! `cur_data()` was deprecated in dplyr 1.1.0.
+## ℹ Please use `pick()` instead.</code></pre>
+<pre class="r"><code>avg_slopes_by_CDR_old &lt;- subject_slopes %&gt;%
+  group_by(CDR) %&gt;%
+  summarise(
+    avg_slope = mean(slope, na.rm = TRUE),
+    n = n()
+  )
+
+print(avg_slopes_by_CDR_old)</code></pre>
+<pre><code>## # A tibble: 3 × 3
+##     CDR avg_slope     n
+##   &lt;dbl&gt;     &lt;dbl&gt; &lt;int&gt;
+## 1   0     -0.0306    76
+## 2   0.5   -0.464     38
+## 3   1     -0.826      9</code></pre>
+<p>We see that as CDR increases, expected decline rate of MMSE increases
+as well. This matches the trend for the mean nWBV trajectory slopes
+computed in [1], further verifying the association between MMSE and
+nWBV.</p>
+<p>We can similarly compute the mean of the slopes of the trajectory
+lines generated by Model 1:</p>
+<pre class="r"><code>dc$fit_vals5 &lt;- fitted(fit5)
+
+dc_slope &lt;- dc %&gt;%
+  select(Subject.ID, Age, fit_vals5, CDR) %&gt;%
+  group_by(Subject.ID, CDR) %&gt;%
+  arrange(Age, .by_group = TRUE) %&gt;%
+  summarise(
+    slope = if (n() &gt;= 2) coef(lm(fit_vals5 ~ Age))[2] else NA_real_,
+    .groups = &quot;drop&quot;
+  )
+
+avg_slopes_by_CDR_5 &lt;- dc_slope %&gt;%
+  group_by(CDR) %&gt;%
+  summarise(
+    avg_slope = mean(slope, na.rm = TRUE),
+    n = n()
+  )
+
+print(avg_slopes_by_CDR_5)</code></pre>
+<pre><code>## # A tibble: 4 × 3
+##     CDR avg_slope     n
+##   &lt;dbl&gt;     &lt;dbl&gt; &lt;int&gt;
+## 1   0     0.00224    86
+## 2   0.5  -0.160      61
+## 3   1    -0.946      22
+## 4   2   NaN           3</code></pre>
+<p>And for those generated by Model 2:</p>
+<pre class="r"><code>dc$fit_vals6 &lt;- fitted(fit6)
+
+dc_slope &lt;- dc %&gt;%
+  select(Subject.ID, Age, fit_vals6, CDR) %&gt;%
+  group_by(Subject.ID, CDR) %&gt;%
+  arrange(Age, .by_group = TRUE) %&gt;%
+  summarise(
+    slope = if (n() &gt;= 2) coef(lm(fit_vals6 ~ Age))[2] else NA_real_,
+    .groups = &quot;drop&quot;
+  )
+
+avg_slopes_by_CDR_6 &lt;- dc_slope %&gt;%
+  group_by(CDR) %&gt;%
+  summarise(
+    avg_slope = mean(slope, na.rm = TRUE),
+    n = n()
+  )
+
+print(avg_slopes_by_CDR_6)</code></pre>
+<pre><code>## # A tibble: 4 × 3
+##     CDR avg_slope     n
+##   &lt;dbl&gt;     &lt;dbl&gt; &lt;int&gt;
+## 1   0     -0.0135    86
+## 2   0.5   -0.227     61
+## 3   1     -1.20      22
+## 4   2    NaN          3</code></pre>
+<p>And for those generated by Model 3:</p>
+<pre class="r"><code>dc$fit_spline &lt;- fitted(fit_spline)
+
+dc_slope &lt;- dc %&gt;%
+  select(Subject.ID, Age, fit_spline, CDR) %&gt;%
+  group_by(Subject.ID, CDR) %&gt;%
+  arrange(Age, .by_group = TRUE) %&gt;%
+  summarise(
+    slope = if (n() &gt;= 2) coef(lm(fit_spline ~ Age))[2] else NA_real_,
+    .groups = &quot;drop&quot;
+  )
+
+avg_slopes_by_CDR &lt;- dc_slope %&gt;%
+  group_by(CDR) %&gt;%
+  summarise(
+    avg_slope = mean(slope, na.rm = TRUE),
+    n = n()
+  )
+
+print(avg_slopes_by_CDR)</code></pre>
+<pre><code>## # A tibble: 4 × 3
+##     CDR avg_slope     n
+##   &lt;dbl&gt;     &lt;dbl&gt; &lt;int&gt;
+## 1   0     -0.0198    86
+## 2   0.5   -0.302     61
+## 3   1     -1.29      22
+## 4   2    NaN          3</code></pre>
+<p>Comparing the mean slopes per CDR group to those of the actual
+trajectories for each model, we see that Model 1 has the closest slope
+for CDR = 1 and the furthest for CDR = 0 and CDR = 0.5; in particular,
+for CDR = 0 it has a positive mean slope, making it unsuitable for
+predictions with this CDR group but quite suitable for CDR = 1. Model 3
+appears to be the best model for CDR = 0 and CDR = 0.5, while Model 2 is
+slightly better than Model 3 for CDR = 1 but worse than Model 1. Note
+that these assessments are quite limited due to the small dataset size;
+in particular, many subject slopes were not able to be computed for the
+initial trajectories, so the CDR = 1 group is especially small (9
+subjects).</p>
+<div style="page-break-before: always;">
+
+</div>
+</div>
+<div id="issues-with-residuals" class="section level2">
+<h2>Issues With Residuals</h2>
+<p>To test residuals, we reconstruct our models as generalized linear
+mixed models using the glmmTMB package and then use the DHARMa package
+to plot residuals.</p>
+<p>For Model 1:</p>
+<pre class="r"><code>fit5_tmb &lt;- glmmTMB(
+  MMSE ~ nWBV + Age + SES + nWBV:SES + Age:SES + (1 + nWBV | Subject.ID),
+  data = dc,
+  REML = TRUE
+)
+
+res_5 &lt;- simulateResiduals(fittedModel = fit5_tmb)
+plot(res_5)</code></pre>
+<p><img src="Report_files/figure-html/unnamed-chunk-24-1.svg" width="576" /></p>
+<p>For Model 2:</p>
+<pre class="r"><code>fit6_tmb &lt;- glmmTMB(
+  MMSE ~ nWBV_scaled + nWBV_sq_scaled + Age + SES + nWBV_scaled*SES + Age*SES + (1 + nWBV | Subject.ID),
+  data = dc,
+  REML = TRUE
+)
+
+res_6 &lt;- simulateResiduals(fittedModel = fit6_tmb)
+plot(res_6)</code></pre>
+<p><img src="Report_files/figure-html/unnamed-chunk-25-1.svg" width="576" /></p>
+<p>For Model 3:</p>
+<pre class="r"><code>dc$ns_nWBV_scaled &lt;- ns(dc$nWBV_scaled, df = 4)
+ns_basis &lt;- ns(dc$nWBV_scaled, df = 4)
+ns_df &lt;- as.data.frame(ns_basis)
+colnames(ns_df) &lt;- paste0(&quot;ns_nWBV_&quot;, 1:ncol(ns_df))
+
+dc &lt;- bind_cols(dc, ns_df)
+
+fit_spline_tmb &lt;- glmmTMB(
+  MMSE ~ ns_nWBV_1 + ns_nWBV_2 + ns_nWBV_3 + Age + SES + nWBV * SES + Age * SES
+  + (1 + nWBV | Subject.ID),
+  data = dc,
+  REML = TRUE
+)
+
+res_spline &lt;- simulateResiduals(fit_spline_tmb)
+plot(res_spline)</code></pre>
+<p><img src="Report_files/figure-html/unnamed-chunk-26-1.svg" width="576" /></p>
+<p>Note that for Model 3 we’ve excluded ns_nWBV_4 as it is collinear
+with the other basis functions, which prevents DHARMa from simulating
+the residuals. This was unnecessary when we initially constructed the
+model in the results section, as LMER automatically droped the collinear
+column.</p>
+<p>In all three models, we see that the curves in the residual plots are
+not all flat, which is indicative of heteroskedasticity that the models
+fail to account for. Each model fails the KS test with p-value &lt;
+0.01, indicating that the residuals are not uniformly distributed, and
+each model fails the outlier test with p-value &lt; 0.01, indicating
+that the model’s performance is significantly affected by the presence
+of outliers. We see that even introducing non-linearity, as we have done
+in Model 2 and Model 3, does little to improve these issues. These are
+the limitations of LMEs that arise when working with non-normal
+data.</p>
+<div style="page-break-before: always;">
+
+</div>
+</div>
+<div id="possible-solutions-for-residual-issues" class="section level2">
+<h2>Possible Solutions for Residual Issues</h2>
+<p>In this particular case, the data is heavily left-skewed, with most
+MMSE scores being at or close to 30. In particular, this means that this
+data has a lot of individuals who do not experience cognitive decline.
+We can flip the MMSE scores so that most scores are at or close to 0,
+resulting in zero-inflation. Then we can use glmmTMB to construct a
+generalized linear mixed model that accounts for zero-inflation, i.e it
+accounts for those individuals who do not experience cognitive
+decline.</p>
+<p>For example, we reconstruct Model 1 accounting for zero-inflation
+(note that we omit the random slope to resolve convergence issues):</p>
+<pre class="r"><code>dc_c &lt;- dc
+dc_c$MMSE &lt;- 30 - dc_c$MMSE
+dc_c$nWBV_scaled &lt;- scale(dc_c$nWBV)[,1]
+dc_c$Age_scaled &lt;- scale(dc_c$Age)[,1]
+dc_c$SES_scaled &lt;- scale(dc_c$SES)[,1]
+
+fit5_tmb &lt;- glmmTMB(
+  MMSE ~ nWBV_scaled + Age_scaled + SES_scaled + 
+         nWBV_scaled * SES_scaled + Age_scaled * SES_scaled + 
+         (1 | Subject.ID),
+  data = dc_c,
+  ziformula = ~ Age_scaled,
+  family = poisson,
+  REML = TRUE
+)
+
+AIC(fit5, fit5_tmb)</code></pre>
+<pre><code>## Warning in AIC.default(fit5, fit5_tmb): models are not all fitted to the same
+## number of observations</code></pre>
+<pre><code>##          df      AIC
+## fit5     11 1621.422
+## fit5_tmb  9 1305.129</code></pre>
+<p>We see that this model performs significantly better than Model 1, as
+it has a significantly lower AIC. Moreover, we can plot the
+residuals:</p>
+<pre class="r"><code>res1 &lt;- simulateResiduals(fit5_tmb)
+plot(res1)</code></pre>
+<p><img src="Report_files/figure-html/unnamed-chunk-28-1.svg" width="576" /></p>
+<p>And we see that the model now passes the KS and outlier tests,
+suggesting that the residuals are uniformly distributed and that the
+model better handles outliers. The curves in the residual plots are
+still not perfectly flat indicating that the model still struggles with
+heteroskedasticity, though it is certainly an improvement to the
+previous plot.</p>
+<p>A similar approach shows some promise in improving Models 2 and 3. It
+was intended that those improvements be showcased in this report, though
+the models that worked in the original R script are experiencing
+convergence issues in markdown. Due to time constraints, the convergence
+issues are unable to be resolved for the purpose of this report, and so
+those models are omitted.</p>
+<div style="page-break-before: always;">
+
+</div>
+</div>
+<div id="on-the-use-of-ai" class="section level2">
+<h2>On the use of AI</h2>
+<p>I would like to give credit to both ChatGPT and Claude for their
+assistance in completing this project. I used both LLMs for the
+following components of the project:</p>
+<p>-Plotting and computing mean trajectory slopes<br> -Double-checking
+p-value/coefficient interpretation<br> -Model Diagnostics<br> -R
+Troubleshooting<br></p>
+<p>I found both models to be quite helpful for plotting. For example,
+when recreating the nWBV trajectories that I originally found in [1], I
+gave ChatGPT a screenshot from the paper and asked it to recreate this
+plot, which it was able to do successfully using xyplot.</p>
+<p>Both models were helpful in validating my impressions for p-values
+and interpreting model coefficients, though they were not perfect (for
+example, ChatGPT once interpreted a p-value to mean that the more
+complex model is a better fit when really it meant the simpler model is
+a better fit. Another example is Claude mixed up left and right skewed
+distributions when I showed it an image of my MMSE histogram.)</p>
+<p>I found both models to be unhelpful with model diagnostics. For
+example, I asked Claude for suggestions on how to deal with the random
+effects being numerically unstable (correlation = -1), and it suggested
+response transformations for MMSE (log, square root, Box-Cox). When
+these transformations made no difference and I asked it for
+alternatives, it proceeded to give the same suggestions in a loop.</p>
+<p>I found ChatGPT to be unhelpful for R troubleshooting, though Claude
+was quite helpful for R troubleshooting. For example, reproducing my R
+script involving non-linear terms in my LMEs was problematic in R
+markdown, as I started having singularity issues that did not come up
+when I ran the same lines of code in my original script. Claude
+suggested scaling nWBV and using LMER as an alternative to LME, and this
+resolved the issue.</p>
+<div style="page-break-before: always;">
+
+</div>
+</div>
+</div>
+<div id="references" class="section level1">
+<h1>References</h1>
+<p>[1] Marcus, Fotenos, et. al., (2010). <em>Open Access Series of
+Imaging Studies: Longitudinal MRI Data in Nondemented and Demented Older
+Adults</em>. MIT Press.</p>
+<p>[2] Marcus, Wang, et al., (2007). <em>Open Access Series of Imaging
+Studies (OASIS): cross-sectional MRI data in young, middle aged,
+nondemented, and demented older adults</em>. MIT Press.</p>
+<p>[3] Boysen, J., (2017). <em>MRI and Alzheimers</em>. Kaggle.
+Retrieved from <a
+href="https://www.kaggle.com/datasets/jboysen/mri-and-alzheimers"
+class="uri">https://www.kaggle.com/datasets/jboysen/mri-and-alzheimers</a></p>
+<p>[4] Morris, J. C., (1993). <em>The Clinical Dementia Rating (CDR) :
+Current version and scoring rules</em>. Wolters Kluwer.</p>
+<p>[5] Folstein, Folstein &amp; McHugh, (1975). <em>“Mini-mental state”:
+A practical method for grading the cognitive state of patients for the
+clinician</em>. Elsevier.</p>
+<p>[6] Rasmussen &amp; Langerman, (2019). <em>Alzheimer’s Disease – Why
+We Need Early Diagnosis</em>. Dove Medical Press.</p>
+</div>
+
+
+
+
+</div>
+
+<script>
+
+// add bootstrap table styles to pandoc tables
+function bootstrapStylePandocTables() {
+  $('tr.odd').parent('tbody').parent('table').addClass('table table-condensed');
+}
+$(document).ready(function () {
+  bootstrapStylePandocTables();
+});
+
+
+</script>
+
+<!-- tabsets -->
+
+<script>
+$(document).ready(function () {
+  window.buildTabsets("TOC");
+});
+
+$(document).ready(function () {
+  $('.tabset-dropdown > .nav-tabs > li').click(function () {
+    $(this).parent().toggleClass('nav-tabs-open');
+  });
+});
+</script>
+
+<!-- code folding -->
+
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>
