@@ -1,0 +1,640 @@
+---
+title: "Causal Inference for Cognitive Decline Using Mixed Effects Models"
+author: "Daniel Dema"
+date: "`r Sys.Date()`"
+output: ioslides_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(spida2)
+library(p3d)
+library(nlme)
+library(car)
+library(lattice)
+library(latticeExtra)
+library(dplyr)
+library(glmmTMB)
+library(DHARMa)
+library(splines)
+library(performance)
+library(lme4)
+library(lmerTest)
+```
+
+## Goals
+
+- Predictive inference for cognitive decline in Alzheimer's disease
+- Explore the limitations of LMEs on non-normal response data
+
+## Data Overview
+
+- Subject ID
+- Visit number
+- Sex
+- Age at visit
+- Years of education
+- Socioeconomic status (SES): score from 0-5
+- Normalized whole brain volume (nWBV): ranges from 0-1
+- Mini-Mental State Examination (MMSE): test score from 0-30
+- Clinical Dementia Ratio (CDR): CDR = 0 (non-demented), CDR = 0.5 (very mild Alzheimer's), CDR = 1 (mild Alzheimer's)
+
+***
+
+```{r}
+df <- read.csv(
+  "D:/Daniel/Documents/MATH6642/final_project/Data/oasis_longitudinal.csv")
+dc <- df[!is.na(df$MMSE) & !is.na(df$SES), ]
+
+dc$SES <- 5 - dc$SES
+
+dc_orig <- dc
+
+dc <- dc[order(dc$Subject.ID, dc$Age), ]
+```
+
+***
+
+```{r}
+hist(dc$EDUC, 
+     breaks = 10, 
+     main = "Histogram of Education Level", 
+     xlab = "Years of Education",
+     ylab = "Number of Individuals",
+     col = "lightblue",
+     border = "white")
+```
+
+***
+
+```{r}
+barplot(table(dc$SES),
+        main = "Barplot of Socioeconomic Status",
+        xlab = "SES",
+        ylab = "Number of Individuals",
+        col = "lightblue",
+        border = "white")
+```
+
+***
+
+```{r}
+barplot(table(dc$M.F), 
+        main = "Barplot of Sex", 
+        xlab = "Sex", 
+        ylab = "Number of Individuals", 
+        col = c("pink", "lightblue"),
+        border = "white")
+```
+
+***
+
+```{r}
+initial_visits <- dc[ave(dc$Visit, dc$Subject.ID, FUN = min) == dc$Visit, ]
+final_visits <- dc[ave(dc$Visit, dc$Subject.ID, FUN = max) == dc$Visit, ]
+
+#Histogram for initial visits
+hist(initial_visits$MMSE, main = "Initial Visit MMSE", breaks = 0:30, xlab = "MMSE",
+     ylab = "Number of Individuals", col = "lightblue", border = "white", xlim = c(0, 30))
+```
+
+***
+
+```{r}
+#Histogram for final visits
+hist(final_visits$MMSE, main = "Final Visit MMSE", breaks = 0:30, xlab = "MMSE",
+     ylab = "Number of Individuals", col = "lightblue", border = "white", xlim = c(0, 30))
+```
+
+## Constructing the LME Model
+
+Starting fixed effects:
+
+- Age
+- Years of education (EDUC)
+- Socioeconomic status (SES)
+- Brain volume (nWBV)
+- Sex (M.F)
+
+***
+
+```{r}
+fit1 <- lme(MMSE ~ nWBV + Age + M.F + SES + EDUC, 
+                  data = dc, 
+                  random = ~ 1 + Age | Subject.ID,
+                  correlation = corAR1(form = ~ 1 | Subject.ID))
+```
+
+***
+
+Random effects possibilities:
+
+- random = ~ 1 | Subject.ID
+- random = ~ 1 + Age | Subject.ID
+- random = ~ 1 + nWBV
+
+***
+
+random = ~ 1 + nWBV has best AIC performance
+
+```{r}
+fit2 <- lme(MMSE ~ nWBV + Age + M.F + SES + EDUC, 
+            data = dc, 
+            random = ~ 1 + nWBV | Subject.ID,
+            correlation = corAR1(form = ~ 1 | Subject.ID),
+            control = lmeControl(opt = "optim", maxIter = 200, 
+            msMaxIter = 200))
+```
+
+***
+
+```{r}
+VarCorr(fit2)
+```
+
+***
+
+```{r}
+summary(fit2)$tTable
+```
+
+***
+
+For fixed effects:
+
+Possible 3-way interactions:
+
+- nWBV * Age * SES: SES influences access to healthcare, slowing decay in nWBV as the subject ages.
+
+- nWBV * Age * M.F: Possible differences in nWBV decay by sex as the subject ages.
+
+- nWBV * Age * EDUC: Higher education slows the loss of brain volume as the subject ages.
+
+***
+
+```{r}
+fit3 <- lme(MMSE ~ nWBV + Age + M.F + SES + EDUC + nWBV * Age * SES
+            + nWBV * Age + nWBV * SES + Age * SES, 
+            data = dc, 
+            random = ~ 1 + nWBV | Subject.ID,
+            correlation = corAR1(form = ~ 1 | Subject.ID),
+            control = lmeControl(opt = "optim", maxIter = 200,
+                                 msMaxIter = 200))
+```
+
+***
+
+```{r}
+VarCorr(fit3)
+```
+
+***
+
+```{r}
+summary(fit3)$tTable
+```
+
+***
+
+Let's consider 2-way interactions instead:
+
+- nWBV * Age : Brain volume changes with age.
+
+- nWBV * EDUC: Education acts as a buffer against brain volume loss.
+
+- nWBV * SES : Higher SES allows for better healthcare, improving preservation of brain volume.
+
+- nWBV * M.F : Sex affects brain volume.
+
+- Age * EDUC : Education acts as a buffer against age effects.
+
+- Age * M.F : Aging affects women and men differently.
+
+- Age * SES : Higher SES acts as a buffer against age effects by again allowing for better healthcare.
+
+***
+
+```{r}
+fit5 <- lme(MMSE ~ nWBV + Age + SES + nWBV * SES + Age * SES, 
+            data = dc, 
+            random = ~ 1 + nWBV | Subject.ID,
+            correlation = corAR1(form = ~ 1 | Subject.ID),
+            control = lmeControl(opt = "optim", maxIter = 200,
+            msMaxIter = 200))
+```
+
+Lowest AIC so far, all terms statistically significant
+
+***
+
+```{r}
+summary(fit5)$tTable
+```
+
+***
+
+```{r}
+VarCorr(fit5)
+```
+
+
+## Diagnostics for G-Matrix
+
+Try within-subject centering?
+
+```{r}
+test <- lme(MMSE ~ nWBV + Age + SES + nWBV * SES + Age * SES, 
+            data = dc, 
+            random = ~ 1 + dvar(nWBV, Subject.ID) | Subject.ID,
+            correlation = corAR1(form = ~ 1 | Subject.ID),
+            control = lmeControl(opt = "optim", maxIter = 200,
+                                 msMaxIter = 200))
+
+anova(fit5, test)
+```
+
+***
+
+```{r}
+VarCorr(test)
+```
+
+***
+
+```{r}
+summary(test)$tTable
+```
+
+***
+
+Trade-off:
+
+Higher AIC, loss of interaction term in exchange for stable G-matrix
+
+## Residuals
+
+Reconstruct fit5 as a glmmTMB so we can use DHARMa to plot residuals:
+
+```{r}
+fit5_tmb <- glmmTMB(
+  MMSE ~ nWBV + Age + SES + nWBV:SES + Age:SES + (1 + nWBV | Subject.ID),
+  data = dc,
+  REML = TRUE
+)
+
+res <- simulateResiduals(fittedModel = fit5_tmb)
+```
+
+***
+
+```{r}
+plot(res)
+```
+
+***
+
+Problems:
+
+- Heteroskedasticity
+- KS test: residuals are not uniformly distributed
+- Outlier test: model handles outliers poorly
+
+Let's try non-linear terms.
+
+***
+
+```{r}
+dc$nWBV_sq <- dc$nWBV^2
+
+fit_nwbv_poly_raw <- glmmTMB(
+  MMSE ~ nWBV + nWBV_sq + Age + SES + nWBV:SES + nWBV_sq:SES + Age:SES
+  + (1 + nWBV | Subject.ID),
+  data = dc,
+  REML = TRUE
+)
+
+sim_nwbv_poly <- simulateResiduals(fit_nwbv_poly_raw)
+```
+
+***
+
+```{r}
+plot(sim_nwbv_poly)
+```
+
+***
+
+```{r}
+AIC(fit_nwbv_poly_raw, fit5_tmb)
+```
+
+***
+
+```{r}
+dc$nWBV_scaled <- scale(dc$nWBV)[,1]
+dc$nWBV_sq_scaled <- dc$nWBV_scaled^2
+
+fit6 <- lmer(MMSE ~ nWBV_scaled + nWBV_sq_scaled + Age + SES + 
+             nWBV_scaled * SES + Age * SES + 
+             (1 + nWBV_scaled | Subject.ID),
+             data = dc)
+```
+
+***
+
+```{r}
+VarCorr(fit6)
+```
+
+***
+
+```{r}
+as.data.frame(summary(fit6)$coefficients[, "Pr(>|t|)"])
+```
+
+***
+
+What if we try splines?
+
+```{r}
+dc$ns_nWBV_scaled <- ns(dc$nWBV_scaled, df = 4)
+ns_basis <- ns(dc$nWBV_scaled, df = 4)
+ns_df <- as.data.frame(ns_basis)
+colnames(ns_df) <- paste0("ns_nWBV_", 1:ncol(ns_df))
+
+dc <- bind_cols(dc, ns_df)
+
+fit_spline_tmb <- glmmTMB(
+  MMSE ~ ns_nWBV_1 + ns_nWBV_2 + ns_nWBV_3 + Age + SES
+  + nWBV * SES + Age * SES
+  + (1 + nWBV | Subject.ID),
+  data = dc,
+  REML = TRUE
+)
+
+res_spline <- simulateResiduals(fit_spline_tmb)
+```
+
+***
+
+```{r}
+plot(res_spline)
+```
+
+***
+
+```{r}
+dc$nWBV_scaled <- scale(dc$nWBV)[,1]
+
+fit_spline <- lmer(MMSE ~ ns(nWBV_scaled, df=4) + Age + SES + 
+                     nWBV_scaled*SES + Age:SES + 
+                   (1 + nWBV_scaled | Subject.ID),
+                   data = dc,
+                   REML = TRUE)
+```
+
+***
+
+```{r}
+VarCorr(fit_spline)
+```
+
+***
+
+```{r}
+as.data.frame(summary(fit_spline)$coefficients[, "Pr(>|t|)"])
+```
+
+## Solution for Residuals?
+
+Use a glmmTMB with zero-inflation.
+
+```{r}
+dc_c <- dc
+dc_c$MMSE <- 30 - dc_c$MMSE
+dc_c$nWBV_scaled <- scale(dc_c$nWBV)[,1]
+dc_c$Age_scaled <- scale(dc_c$Age)[,1]
+dc_c$SES_scaled <- scale(dc_c$SES)[,1]
+
+fit5_tmb <- glmmTMB(
+  MMSE ~ nWBV_scaled + Age_scaled + SES_scaled + 
+         nWBV_scaled * SES_scaled + Age_scaled * SES_scaled + 
+         (1 | Subject.ID),
+  data = dc_c,
+  ziformula = ~ Age_scaled,
+  family = poisson,
+  REML = TRUE
+)
+```
+
+***
+
+```{r}
+AIC(fit5, fit5_tmb)
+```
+
+***
+
+```{r}
+res1 <- simulateResiduals(fit5_tmb)
+plot(res1)
+```
+
+## Model Interpretation
+
+```{r}
+VarCorr(fit_spline)
+```
+
+***
+```{r}
+wald(fit_spline)
+```
+
+## Model Comparison
+
+```{r}
+AIC(fit5, fit6, fit_spline)
+```
+
+***
+
+```{r}
+cdr_colors <- c("0" = "lightblue", "0.5" = "violet", "1" = "darkblue")
+
+#nWBV trajectories
+nWBV_traj <- xyplot(nWBV ~ Age, data = dc,
+       groups = Subject.ID,
+       type = "b",
+       lwd = 1,
+       pch = 16,
+       col = cdr_colors[as.character(dc$CDR)],
+       xlab = "Age (years)",
+       ylab = "nWBV (%)",
+       main = "Longitudinal trajectories of nWBV per subject by CDR group",
+       key = list(text = list(c("CDR 0", "CDR 0.5", "CDR 1")),
+                  points = list(pch = 16, col = c("lightblue", "violet", "darkblue")),
+                  columns = 3))
+```
+
+***
+
+```{r}
+nWBV_traj
+```
+
+***
+
+```{r}
+#MMSE trajectories
+MMSE_traj <- xyplot(MMSE ~ Age, data = dc,
+       groups = Subject.ID,
+       type = "b",
+       lwd = 1,
+       pch = 16,
+       col = cdr_colors[as.character(dc$CDR)],
+       xlab = "Age (years)",
+       ylab = "MMSE",
+       main = "Longitudinal trajectories of MMSE per subject by CDR group",
+       key = list(text = list(c("CDR 0", "CDR 0.5", "CDR 1")),
+                  points = list(pch = 16, col = c("lightblue", "violet", "darkblue")),
+                  columns = 3))
+```
+
+***
+
+```{r}
+MMSE_traj
+```
+
+***
+
+```{r}
+dc_copy <- dc
+
+subject_slopes <- dc_copy %>%
+  group_by(Subject.ID, CDR) %>%
+  filter(n() > 1) %>%  # need at least two points per subject
+  summarise(
+    slope = {
+      fit <- lm(MMSE ~ Age, data = cur_data())
+      coef(fit)["Age"]
+    },
+    .groups = "drop"
+  )
+
+avg_slopes_by_CDR_old <- subject_slopes %>%
+  group_by(CDR) %>%
+  summarise(
+    avg_slope = mean(slope, na.rm = TRUE),
+    n = n()
+  )
+```
+
+***
+
+```{r}
+dc$fit_vals5 <- fitted(fit5)
+
+dc_slope <- dc %>%
+  select(Subject.ID, Age, fit_vals5, CDR) %>%
+  group_by(Subject.ID, CDR) %>%
+  arrange(Age, .by_group = TRUE) %>%
+  summarise(
+    slope = if (n() >= 2) coef(lm(fit_vals5 ~ Age))[2] else NA_real_,
+    .groups = "drop"
+  )
+
+avg_slopes_by_CDR_5 <- dc_slope %>%
+  group_by(CDR) %>%
+  summarise(
+    avg_slope = mean(slope, na.rm = TRUE),
+    n = n()
+  )
+```
+
+***
+
+```{r}
+dc$fit_vals6 <- fitted(fit6)
+
+dc_slope <- dc %>%
+  select(Subject.ID, Age, fit_vals6, CDR) %>%
+  group_by(Subject.ID, CDR) %>%
+  arrange(Age, .by_group = TRUE) %>%
+  summarise(
+    slope = if (n() >= 2) coef(lm(fit_vals6 ~ Age))[2] else NA_real_,
+    .groups = "drop"
+  )
+
+avg_slopes_by_CDR_6 <- dc_slope %>%
+  group_by(CDR) %>%
+  summarise(
+    avg_slope = mean(slope, na.rm = TRUE),
+    n = n()
+  )
+```
+
+***
+
+```{r}
+dc$fit_spline <- fitted(fit_spline)
+
+dc_slope <- dc %>%
+  select(Subject.ID, Age, fit_spline, CDR) %>%
+  group_by(Subject.ID, CDR) %>%
+  arrange(Age, .by_group = TRUE) %>%
+  summarise(
+    slope = if (n() >= 2) coef(lm(fit_spline ~ Age))[2] else NA_real_,
+    .groups = "drop"
+  )
+
+avg_slopes_by_CDR <- dc_slope %>%
+  group_by(CDR) %>%
+  summarise(
+    avg_slope = mean(slope, na.rm = TRUE),
+    n = n()
+  )
+```
+
+***
+
+```{r}
+print(avg_slopes_by_CDR_old)
+print(avg_slopes_by_CDR_5)
+```
+
+***
+
+```{r}
+print(avg_slopes_by_CDR_6)
+print(avg_slopes_by_CDR)
+```
+
+***
+
+- Model with only linear terms is closest for CDR = 1
+- Spline model is closest for CDR = 0, CDR = 0.5
+- Incorporating non-linearity seems to steepen the mean decline for each CDR group
+
+## References
+
+- Marcus, Fotenos, et. al., (2010). *Open Access Series of Imaging Studies: Longitudinal MRI Data in Nondemented and Demented Older Adults*. MIT Press.
+
+- Marcus, Wang, et al., (2007). *Open Access Series of Imaging Studies (OASIS): cross-sectional MRI data in young, middle aged, nondemented, and demented older adults*. MIT Press.
+
+- Boysen, J., (2017). *MRI and Alzheimers*. Kaggle. Retrieved from https://www.kaggle.com/datasets/jboysen/mri-and-alzheimers
+
+- Morris, J. C., (1993). *The Clinical Dementia Rating (CDR) : Current version and scoring rules*. Wolters Kluwer.
+
+- Folstein, Folstein & McHugh, (1975). *“Mini-mental state”: A practical method for grading the cognitive state of patients for the clinician*. Elsevier.
+
+- Rasmussen & Langerman, (2019). *Alzheimer’s Disease – Why We Need Early Diagnosis*. Dove Medical Press.
+
+## 
+
+<div style="text-align: center; font-size: 60px; font-weight: bold;">
+Thanks for your attention!
+</div>
+
