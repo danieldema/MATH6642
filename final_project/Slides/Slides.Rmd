@@ -1,5 +1,5 @@
 ---
-title: "Causal Inference for Cognitive Decline Using Mixed Effects Models"
+title: "Predictive Inference for Cognitive Decline Using Mixed Effects Models"
 author: "Daniel Dema"
 date: "`r Sys.Date()`"
 output: ioslides_presentation

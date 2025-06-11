@@ -1,5 +1,5 @@
 ---
-title: "Causal Inference for Cognitive Decline Using Mixed Effects Models"
+title: "Predictive Inference for Cognitive Decline Using Mixed Effects Models"
 author: "Daniel Dema"
 date: "`r Sys.Date()`"
 output: 
@@ -32,7 +32,7 @@ library(lmerTest)
 
 # Abstract
 
-In [1], the authors analyze a sample of longitudinal data from the OASIS (Open Access Series of Imaging Studies, see [2]) dataset, consisting of 150 subjects between the ages of 60 to 96. Subjects are categorized by their CDR (Clinical Dementia Ratio), being either nondemented (CDR = 0), having very mild Alzheimer's disease, (CDR = 0.5) or having mild Alzheimer's disease (CDR = 1). The authors analyze the progression of brain volume atrophy in Alzheimer's disease. In this report, we use the same dataset (retrieved from [3]) to study the progression of cognitive decline in Alzheimer's disease using MMSE (Mini-Mental State Examination) score as a proxy for cognitive decline. We model MMSE using a linear mixed effects model on various predictors in the dataset for the purpose of examining causes of cognitive decline, and in doing so we explore the limitations of mixed effect models on non-normal, heavily skewed data.
+In [1], the authors analyze a sample of longitudinal data from the OASIS (Open Access Series of Imaging Studies, see [2]) dataset, consisting of 150 subjects between the ages of 60 to 96. Subjects are categorized by their CDR (Clinical Dementia Ratio), being either nondemented (CDR = 0), having very mild Alzheimer's disease, (CDR = 0.5) or having mild Alzheimer's disease (CDR = 1). The authors analyze the progression of brain volume atrophy in Alzheimer's disease. In this report, we use the same dataset (retrieved from [3]) to study the progression of cognitive decline in Alzheimer's disease using MMSE (Mini-Mental State Examination) score as a proxy for cognitive decline. We model MMSE using a linear mixed effects model on various predictors in the dataset for the purpose of examining features associated with cognitive decline, and in doing so we explore the limitations of mixed effect models on non-normal, heavily skewed data.
 
 # Introduction
 
@@ -49,7 +49,7 @@ We will model MMSE using features in the dataset to assess predictors for cognit
 Features of interest in the dataset for our modelling include Subject ID (Subject.ID), visit number (Visit), sex (M.F), age at visit (Age), years of education (EDUC), socioeconomic status (SES), MMSE score (MMSE), CDR score (CDR), and normalized whole brain volume (nWBV). All subjects are right handed. Subjects were screened to ensure exclusion of subjects with physiological causes of dementia other than Alzheimer's disease [1].
 
 ```{r}
-df <- read.csv("D:/Daniel/Documents/MATH6642/final_project/oasis_longitudinal.csv")
+df <- read.csv("D:/Daniel/Documents/MATH6642/final_project/Data/oasis_longitudinal.csv")
 dc <- df[!is.na(df$MMSE) & !is.na(df$SES), ]
 
 #Note: SES is ordered lowest = 5 and highest = 1; we will reverse the ordering

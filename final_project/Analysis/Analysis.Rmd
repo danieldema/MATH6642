@@ -1,5 +1,5 @@
 ---
-title: "Causal Inference for Cognitive Decline Using Mixed Effects Models: Detailed Analysis"
+title: "Predictive Inference for Cognitive Decline Using Mixed Effects Models: Detailed Analysis"
 author: "Daniel Dema"
 date: "`r Sys.Date()`"
 output: 
@@ -39,7 +39,7 @@ This document provides the details for the construction of the models presented 
 Note that in the original dataset, SES is ranked backwards, in the sense that 1 is the highest and 5 is the lowest. When loading the data, we reverse the order for ease of interpretability.
 
 ```{r}
-df <- read.csv("D:/Daniel/Documents/MATH6642/final_project/oasis_longitudinal.csv")
+df <- read.csv("D:/Daniel/Documents/MATH6642/final_project/Data/oasis_longitudinal.csv")
 dc <- df[!is.na(df$MMSE) & !is.na(df$SES), ]
 
 dc$SES <- 5 - dc$SES
