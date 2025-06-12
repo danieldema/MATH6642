@@ -369,7 +369,7 @@ summary(fit2)
 # Now we consider interaction terms. We consider three possible 3-way Interaction terms:
 
 # 1) nWBV * Age * SES: SES influences access to healthcare, slowing decay in
-#nWBV as the subejcts ages.
+#nWBV as the subject ages.
 
 # 2) nWBV * Age * M.F: Possible differences in nWBV decay by sex as the subject ages.
 
@@ -1197,7 +1197,7 @@ summary(fit_spline)
 
 For random effects, the interpretation is the same as in fit6.
 
-For fixed effects, the coefficients in fit_spline that are present in fit5 are again similar and are again to be interpreted similarly. The coefficients for the spline terms (~4.30, ~1.62, ~8.34) are suggestive of a non-linear, positive relationship between nWBV and MMSE.
+For fixed effects, the coefficients in fit_spline that are present in fit5 are again similar and are again to be interpreted similarly. The coefficients for the spline terms (~4.30, ~1.62, ~8.34) are suggestive of a non-linear relationship between nWBV and MMSE, though no further conclusions can be drawn.
 
 # On the use of AI
 

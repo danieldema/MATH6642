@@ -323,7 +323,7 @@ anova(fit_spline)
 
 The interpretation of random effects is similar to that of Model 2, with Model 3 having correlation (-0.95) between slope and intercept.
 
-In the fixed effects, the coefficients for Age, SES, SES:nWBV and Age:SES are similar to those in Model 2, and can be interpreted in the same way. The high, positive coefficients for the nWBV spline terms suggest that the relationship between MMSE and nWBV is both positive and highly non-linear. All coefficients are statistically significant with p-values < 0.01.
+In the fixed effects, the coefficients for Age, SES, SES:nWBV and Age:SES are similar to those in Model 2, and can be interpreted in the same way. The coefficients for the spline terms cannot be directly interpreted, though at the very least they suggest the relationship between MMSE and nWBV is highly non-linear. All coefficients are statistically significant with p-values < 0.01.
 
 In summary, our models all agree that higher brain volume, higher socioeconomic status, and higher age predict higher MMSE, with age having a smaller effect than brain volume and socioeconomic status, and the effects of brain volume and age being dampened through interactions with socioeconomic status.
 
